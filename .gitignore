@@ -1,0 +1,42 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Source code is not published — Ka1zen is distributed only as a signed .dmg
+Ka1zen/
+Ka1zen.xcodeproj/
+Ka1zen.xcworkspace/
+project.yml
+
+# Xcode / build artifacts
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+.swiftpm/
+
+# Generated app bundle
+Ka1zen.app/
+
+# Local DMGs (attach to GitHub Releases instead of committing)
+*.dmg
+
+# Local config
+.env
+.env.local
+.claude/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Python (in case contributors run install.sh locally)
+__pycache__/
+*.pyc
+venv/
+.venv/
