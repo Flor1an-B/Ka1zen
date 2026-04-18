@@ -194,6 +194,20 @@ Not without a separate agreement. Ka1zen is released under **PolyForm Noncommerc
 
 ---
 
+## Credits & acknowledgements
+
+Ka1zen stands on top of outstanding open-source work from the Apple ML team and the Hugging Face community. Go give them a star — they make on-device AI on the Mac actually possible:
+
+- **[Apple MLX](https://github.com/ml-explore/mlx)** ([`@ml_explore`](https://x.com/ml_explore), [`@awnihannun`](https://x.com/awnihannun)) — the array framework that powers everything on the GPU / Neural Engine side.
+- **[`mlx-lm`](https://github.com/ml-explore/mlx-lm)** and **[`mlx-vlm`](https://github.com/Blaizzy/mlx-vlm)** — the OpenAI-compatible inference servers Ka1zen spawns for text and vision models.
+- **[`mflux`](https://github.com/filipstrand/mflux)** — FLUX.2 image generation on Apple Silicon.
+- **[Hugging Face](https://huggingface.co/)** & **[`huggingface-hub`](https://github.com/huggingface/huggingface_hub)** — model distribution, the hub, the cache, everything.
+- **[mlx-community](https://huggingface.co/mlx-community)** — the reason we all have day-one MLX quantizations of every open model worth running. Huge thanks.
+
+If you're a maintainer of any of these projects and want a different link or wording, open an issue — happy to adjust.
+
+---
+
 ## Support the project
 
 Ka1zen is a personal project built in my own time. If you find it useful, you can keep it going:
