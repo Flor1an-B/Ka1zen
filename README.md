@@ -12,8 +12,18 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2015%2B-blue" alt="macOS 15+">
   <img src="https://img.shields.io/badge/architecture-Apple%20Silicon-black" alt="Apple Silicon">
-  <img src="https://img.shields.io/badge/version-0.3.1-orange" alt="Version 0.3.1">
+  <img src="https://img.shields.io/badge/version-0.3.4-orange" alt="Version 0.3.4">
   <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-green" alt="PolyForm Noncommercial">
+</p>
+
+<p align="center">
+  <a href="USER_GUIDE.md"><img src="https://img.shields.io/badge/%F0%9F%93%96-User%20Guide-5B8DEF?style=for-the-badge" alt="User Guide"></a>
+  &nbsp;
+  <a href="MODEL_GUIDE.md"><img src="https://img.shields.io/badge/%F0%9F%A7%A0-Model%20Guide-7C3AED?style=for-the-badge" alt="Model Guide"></a>
+  &nbsp;
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%F0%9F%93%9D-Changelog-059669?style=for-the-badge" alt="Changelog"></a>
+  &nbsp;
+  <a href="https://github.com/Flor1an-B/Ka1zen/releases/latest"><img src="https://img.shields.io/badge/%E2%AC%87-Download-F97316?style=for-the-badge" alt="Download latest"></a>
 </p>
 
 <p align="center">
