@@ -284,12 +284,16 @@ Search and download MLX models directly.
 
 ### Recommended starter models
 
+For a full breakdown — how to read MLX model names, dense vs MoE, quantization trade-offs, and curated recommendations for every RAM tier from 8 GB to 192 GB — see the dedicated **[Model Guide](MODEL_GUIDE.md)**.
+
+Quick defaults:
+
 | Model | Size | Min RAM | Capabilities |
 |---|---|---|---|
 | `mlx-community/Qwen3-8B-4bit` | ~4.5 GB | 16 GB | Text · Tools · Thinking |
 | `mlx-community/gemma-4-31b-it-4bit` | ~17 GB | 32 GB | Vision · Audio · Thinking |
-| `mlx-community/DeepSeek-R1-0528-7B-4bit` | ~4 GB | 16 GB | Reasoning |
-| `mlx-community/Mistral-Small-4-4bit` | ~14 GB | 16–32 GB | Vision · Tools |
+| `mlx-community/Llama-3.3-70B-Instruct-4bit` | ~39 GB | 64 GB | Text · Tools |
+| `mlx-community/Qwen3.5-122B-A10B-4bit` | ~65 GB | 96 GB | MoE · Vision · Tools · Thinking |
 
 ### Gated models
 

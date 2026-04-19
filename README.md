@@ -166,6 +166,7 @@ When the model is ready, you land in the chat. Type a message, press **Enter**, 
 ## Documentation
 
 - 📘 [**User Guide**](USER_GUIDE.md) — full walkthrough of every feature: chat, vision, RAG, image generation, API relay, Token Inspector, advanced settings.
+- 🧠 [**Model Guide**](MODEL_GUIDE.md) — how to pick a model for your Mac: naming conventions (4-bit, MoE, A10B…), dense vs MoE, quantization trade-offs, curated `mlx-community` recommendations by RAM tier.
 
 ---
 
