@@ -3,6 +3,14 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.8] — 2026-04-20
+
+### Fixed
+- **Chat responses no longer truncate mid-answer.** Long answers that contained the strings `\nUser:`, `\nHuman:` or `\nSystem:` anywhere in their body (for example, a French reply containing *"Système:"*, a config sample listing `User:` fields, or any enumeration that started a bullet with *System:* / *Assistant:*) were being cut off by a client-side "runaway" guard that treated those markers as a sign the model had started role-playing the next turn. The guard is removed: we now rely on the server's `finish_reason` and the model's own EOS token to end a stream, and the full response is shown regardless of what it contains. Reproduced with long technical prompts on Qwen3.6-35B-A3B-8bit and Gemma 3 27B where the answer would stop after 500-900 tokens; those same prompts now complete cleanly past 1800 tokens.
+
+### Added
+- **Download the update from inside Ka1zen.** *Help → Check for Updates…* now offers a **Download Update** button alongside *Open Release Page*. Ka1zen streams the release DMG to your `~/Downloads` folder with a live progress sheet (including a Cancel button), then lets you open the DMG or reveal it in Finder. No more round-trip to the browser for the download. The button only appears when the GitHub release has a `.dmg` asset attached; releases that ship only source or dSYM bundles still send you to the release page.
+
 ## [0.3.7] — 2026-04-20
 
 ### Added
