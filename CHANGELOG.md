@@ -3,6 +3,14 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.9] — 2026-04-21
+
+### Added
+- **GPT and Nemotron families in the chat model picker.** `gpt-oss-*` (OpenAI's open-weights release), `gpt2`, `gpt-neo`, `gpt-j`, and NVIDIA's `Nemotron` models were lumped into the catch-all *Other* section, which was misleading — these are well-known families with their own behaviour profiles. They now get dedicated sections, icons, and sort alongside Qwen/Gemma/GLM. Nemotron detection runs before Llama detection so that `Llama-3.1-Nemotron-70B` and similar Llama-based Nemotron fine-tunes land in *Nemotron* instead of *Llama*.
+
+### Changed
+- **MLX toggle enabled by default in Model Manager → Browse.** The *MLX-only* filter used to start unchecked, which meant the first time a user opened Browse they saw a flood of GGUF / bnb / AWQ / GPTQ / EXL2 repos that `mlx_lm.server` cannot load. Filtering on MLX is now the default — the browse list only shows models the app can actually run. Uncheck the toggle to see the broader catalogue (e.g. when you want to download a repo for another tool).
+
 ## [0.3.8] — 2026-04-20
 
 ### Fixed
