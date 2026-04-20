@@ -473,6 +473,7 @@ Click the **share** icon in the chat toolbar (or **File → Export Conversation*
 |---|---|
 | Downloaded models | `~/.cache/huggingface/hub/` |
 | Ka1zen database (conversations, RAG) | `~/Library/Application Support/Ka1zen/` |
+| Encrypted secrets (API keys, relay bearer) | `~/Library/Application Support/Ka1zen/secrets.enc` |
 | User preferences | `~/Library/Preferences/com.lefbe.Ka1zen.plist` |
 | HuggingFace token | `~/.cache/huggingface/token` |
 

@@ -3,6 +3,26 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.7] — 2026-04-20
+
+### Added
+- **Direct-URL auto-fetch.** When your message contains one or more `http(s)://` URLs, Ka1zen now skips web-search (which sees the URL as keywords and returns noise) and fetches each URL directly with `fetch_page`, up to 3 per message. The page content is injected into the model's context as `### <url>` sections, and clickable sources appear on the assistant reply. Paste a GitHub repo, an article URL or a documentation page and ask "summarise this" — the model sees the actual page.
+- **GitHub native handler in `fetch_page`.** `github.com` is a React SPA whose raw HTML contains almost no text. Ka1zen now routes `github.com/<owner>/<repo>` to the REST API (README + metadata) and `github.com/<owner>/<repo>/blob/<ref>/<path>` to `raw.githubusercontent.com`, so repo URLs return real content instead of empty shells.
+- **Headless WKWebView fallback for JS-rendered pages.** If the raw HTML extracts fewer than 200 characters of readable text, Ka1zen spins up a hidden `WKWebView`, lets the page's JavaScript hydrate, then reads `document.body.innerText`. Fixes Reddit, Medium, Notion, Twitter/X and other single-page apps that used to return empty results. Runs in an isolated, cookie-free session (no auth leakage).
+
+### Changed
+- **Consistent Safari 17 User-Agent** across `web_search`, `fetch_page` and the JS renderer. Minimal `Mozilla/5.0` strings were tripping bot filters on legitimate sites.
+- **DDG provider fallback chain.** `web_search` now tries `html.duckduckgo.com` first and falls back to `lite.duckduckgo.com` on empty or error responses instead of giving up after one provider.
+- **Smart year injection.** The automatic current-year suffix added to `web_search` queries is now skipped when the query already contains a year, looks like a URL, or isn't time-sensitive (news / prices / weather / scores). Appending `2026` to `https://github.com/...` actively hurt DDG ranking.
+- **Dedicated `URLCache` (10 MB memory / 50 MB disk)** and **persistent cookie jar** (`HTTPCookieStorage.shared`) for the search session. Follow-up questions on the same topic hit the cache instead of re-crawling, and DDG's session cookie survives so repeated requests aren't flagged as fresh bot traffic.
+- **Secret storage moved off the macOS Keychain.** API keys and the API Relay bearer token are now kept in an encrypted on-disk file (`~/Library/Application Support/Ka1zen/secrets.enc`, AES-GCM, key derived per-machine via HKDF-SHA256 from `IOPlatformUUID`, `0600` perms). Ad-hoc-signed builds on macOS Sequoia could not persist Keychain ACL updates — the system showed the password prompt, the right password was accepted, and the write silently failed (only ESC dismissed the dialog). Each new release re-triggered that broken prompt because the code hash changed. The new store never touches `SecItem*`, so no prompt is ever shown on launch or upgrade.
+
+### Migration notes for users upgrading from 0.3.6
+- **Model/LLM configurations, conversations, settings**: preserved (stored as JSON, not in the Keychain).
+- **API keys on remote `ModelConfig`s**: not migrated. Re-enter once in Settings → Models → Edit. (Local `mlx_lm.server` setups have no API key to re-enter.)
+- **API Relay bearer token**: regenerated automatically on first launch. External clients (Continue / Cursor / Zed / LM Studio) need the new value from Server → Settings → Bearer Token.
+- **Orphan Keychain entries** (`com.lefbe.Ka1zen` / `modelConfig.apiKey.*`, `com.lefbe.Ka1zen` / `server.bearerToken`) remain in Keychain Access.app but are never read or written again. You can delete them manually; it's not required.
+
 ## [0.3.6] — 2026-04-19
 
 ### Added
