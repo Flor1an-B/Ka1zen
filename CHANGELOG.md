@@ -3,6 +3,12 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.10] — 2026-04-21
+
+### Fixed
+- **Prompt optimizer now works with reasoning models.** On Nemotron, Qwen3-Thinking, DeepSeek-R1 and similar families, clicking ✨ *Improve / Concise / Detailed…* silently did nothing: a 400-token cap inside `runQuickLLM` was being consumed entirely by the model's `<think>…</think>` reasoning block before any content tokens reached the stream, so the optimizer received an empty body and the input field was never updated. The cap is now 1500 tokens, leaving room for thinking + the rewritten prompt, and the sanitizer strips any `<think>…</think>` blocks (plus the orphan `</think>` case for templates like Nemotron Cascade / Qwopus-GLM-Healed that pre-inject `<think>\n` into the prompt). Failures and empty content are now logged (`subsystem: com.ka1zen, category: ChatViewModel`) instead of silently returning `nil`.
+- **Thinking no longer flashes in the chat bubble before jumping to the Thinking section.** On Qwen3-Thinking fine-tunes, Nemotron Cascade, Qwopus and any other model whose chat template pre-injects `<think>\n` into the assistant prompt, the stream begins already inside the reasoning block — no `<think>` tag is ever emitted. The parser only detected this retroactively (once `</think>` finally arrived) so the first seconds of reasoning rendered in the visible bubble and then abruptly disappeared into the collapsible Thinking panel. A proactive synth now fires at stream start when *thinking mode is on* and no thinking marker of any format is present in the buffer, routing content into the Thinking panel from the first token. Gemma 4 26B/31B (`<|channel>thought…<channel|>`) and Gemma 4 E2B/E4B (`<|think|>…<turn|>`) are explicitly excluded from the proactive branch so their native markers are still handled by the standard parser.
+
 ## [0.3.9] — 2026-04-21
 
 ### Added
