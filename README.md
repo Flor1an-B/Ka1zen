@@ -12,7 +12,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2015%2B-blue" alt="macOS 15+">
   <img src="https://img.shields.io/badge/architecture-Apple%20Silicon-black" alt="Apple Silicon">
-  <img src="https://img.shields.io/badge/version-0.3.10-orange" alt="Version 0.3.10">
+  <img src="https://img.shields.io/badge/version-0.3.11-orange" alt="Version 0.3.11">
   <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-green" alt="PolyForm Noncommercial">
 </p>
 
@@ -53,7 +53,7 @@ Ka1zen is a native macOS app that runs open large-language models **locally** on
 | 🎙 **Audio** | Speak to the model, it answers (Gemma 4) |
 | 🧠 **Thinking mode** | Watch the model reason before answering (Qwen3, DeepSeek-R1, Gemma 3/4…) |
 | 🌐 **Web search** | DuckDuckGo + page fetch, with clickable `[1]`-style citations |
-| 🎨 **Image generation** | FLUX.2-klein-9B locally via `mflux` — natural-language trigger |
+| 🎨 **Image generation** | FLUX.2-klein-9B locally via `mflux` — natural-language trigger, optional web-search grounding |
 | 📚 **RAG** | Index PDFs, text, code — local embeddings (Apple NLEmbedding), SQLite storage |
 | 🔎 **Token Inspector** | Per-token logprobs visualisation — spot hallucinations |
 | 🗣 **Text-to-Speech** | macOS system TTS, language auto-detect |

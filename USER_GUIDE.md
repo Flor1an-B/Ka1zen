@@ -217,6 +217,40 @@ Ka1zen optimizes your prompt for FLUX before generating, then shows the image in
 
 Image generation requests are **serialized** through an actor — no concurrent GPU calls.
 
+### Grounded generation (web-search + FLUX)
+
+Since 0.3.11, Ka1zen can ground an image in live web-search results. When your message contains **both** an image verb (*generate / create / draw / make*, or their French equivalents *génère / crée / dessine / fais*) **and** a search keyword (*search / look up / on the web / find info*, or their French equivalents *cherche / recherche / sur internet / trouve des infos*), Ka1zen runs:
+
+1. **Web search** on the subject — results appear in the Agent Steps.
+2. **Prompt synthesis** — the active LLM turns the search snippets into a FLUX-optimized English prompt that incorporates the factual details (colors, shapes, era, context).
+3. **FLUX generation** — the image is produced from the enriched prompt. Sources from the web search are attached to the assistant message as clickable `[N]` citations.
+
+Examples:
+
+```
+Search for what a squircle is in UI design and generate an image
+of a photorealistic hand-drawn infographic on white paper lying
+on a blue cutting mat.
+```
+
+```
+Look up the Ford Mustang 1967 and draw the car parked in front
+of an American diner at sunset, photorealistic style.
+```
+
+```
+Find info about Belle Époque Parisian fashion around 1905 and
+create an illustration of a couple walking on the Champs-Élysées.
+```
+
+**When it helps:** technical diagrams, historical scenes, infographic-style illustrations, concepts where your own description would be vague.
+
+**When it doesn't:** faithful reproduction of a specific real product. FLUX generates from text; the search returns text; the gap between "white earbuds with an oval case" and "actual AirPods Pro 3 design" is real and unavoidable without image-to-image reference (not supported by `mflux` yet). Text rendered inside the image also remains unreliable — avoid asking FLUX to write long labels or paragraphs.
+
+**Plain image requests** (no search keyword — *"draw a dragon in an enchanted forest"*) skip the search and go straight to FLUX with no added latency.
+
+Requirements: **Tools** and **Web search** both enabled (top of the chat), a local LLM loaded, and `mflux` installed.
+
 ---
 
 ## 9. Document library (RAG)

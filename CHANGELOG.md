@@ -3,6 +3,11 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.11] — 2026-04-22
+
+### Added
+- **Grounded image generation (web-search + FLUX).** Ka1zen now detects prompts that ask for *both* a search and an image — e.g. *"Search for what a squircle is in UI design and generate an image of a photorealistic infographic on paper"* or *"Look up the Ford Mustang 1967 and draw the car at sunset in front of an American diner"* — and runs a 3-stage pipeline: `web_search` → LLM prompt synthesis (the search results are converted into concrete visual language) → FLUX generation. The resulting image is grounded in real facts retrieved live instead of whatever the model happened to remember. Sources from the web search are attached to the assistant message as clickable `[N]` citations, and both `web_search` and `generate_image` show up as Agent Steps. Detection requires BOTH an image verb (*generate / create / draw / make* and their French equivalents *génère / crée / dessine / fais*) AND a search keyword (*search / look up / on the web / find info* and their French equivalents *cherche / recherche / sur internet / trouve des infos*) in the same message — plain image requests like *"draw a dragon in an enchanted forest"* continue through the existing direct-to-FLUX path with no added latency. Best suited for technical diagrams, historical scenes, and infographic-style illustrations where factual precision improves composition; less useful for faithful product replicas (FLUX has no image-to-image reference in `mflux`, and text rendered on images remains unreliable — a FLUX-wide limitation).
+
 ## [0.3.10] — 2026-04-21
 
 ### Fixed
