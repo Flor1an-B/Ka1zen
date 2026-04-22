@@ -3,6 +3,11 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.12] — 2026-04-22
+
+### Fixed
+- **Grounded image generation now triggers reliably on English prompts.** 0.3.11 detected phrasings like *"Generate an image of…"* where the image noun follows the verb immediately, but missed *"Search for X and create a **photorealistic** image of Y"* — the adjective between `create` and `image` broke the exact-substring match, and the implicit check only fired when the message started with the verb. French phrasings (`crée une image photoréaliste`) kept working because the adjective sits *after* the noun. A third detection layer now matches `<verb> … <image-noun>` within a 60-character window, tolerating any adjective between the two. Verbs covered: `generate / create / make / draw` and their French equivalents; nouns covered: `image / picture / photo / illustration / drawing / dessin`. Plain image requests (no search keyword) continue to bypass the pipeline.
+
 ## [0.3.11] — 2026-04-22
 
 ### Added

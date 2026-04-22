@@ -225,7 +225,7 @@ Since 0.3.11, Ka1zen can ground an image in live web-search results. When your m
 2. **Prompt synthesis** — the active LLM turns the search snippets into a FLUX-optimized English prompt that incorporates the factual details (colors, shapes, era, context).
 3. **FLUX generation** — the image is produced from the enriched prompt. Sources from the web search are attached to the assistant message as clickable `[N]` citations.
 
-Examples:
+Examples (English):
 
 ```
 Search for what a squircle is in UI design and generate an image
@@ -234,13 +234,29 @@ on a blue cutting mat.
 ```
 
 ```
-Look up the Ford Mustang 1967 and draw the car parked in front
-of an American diner at sunset, photorealistic style.
+Search for a 1967 Ford Mustang and create a photorealistic image
+of this car parked in front of an American diner at sunset.
 ```
 
 ```
-Find info about Belle Époque Parisian fashion around 1905 and
-create an illustration of a couple walking on the Champs-Élysées.
+Look up the Renaissance fresco technique and make a detailed
+illustration of an artist at work on a church ceiling.
+```
+
+```
+Find info about Japanese ramen shops in Tokyo and generate a
+cinematic photo of a steaming bowl of tonkotsu ramen on a
+wooden counter with neon reflections.
+```
+
+```
+Search the web for James Webb Space Telescope imagery and draw
+a stylized poster celebrating its deep-field observations.
+```
+
+```
+Find information about Belle Époque Parisian fashion around 1905
+and create an illustration of a couple walking on the Champs-Élysées.
 ```
 
 **When it helps:** technical diagrams, historical scenes, infographic-style illustrations, concepts where your own description would be vague.
