@@ -395,6 +395,16 @@ Ka1zen supports multiple models running simultaneously on different ports.
 
 **Capabilities** — toggles for Vision / Tool use / Thinking / Audio input / "Set as active". The **Auto-detect** button reads the local `config.json` automatically.
 
+#### Publisher-recommended defaults
+
+Since 0.3.13, every newly downloaded model is created with the generation parameters its publisher recommends. Ka1zen looks at three sources in order:
+
+1. **The repo's own `generation_config.json`** — fetched from the local HF cache, or directly from HuggingFace. Qwen3, Gemma, DeepSeek and most first-party repos ship this file.
+2. **Family-level fallback** — applied when the repo strips the file (common for community fine-tunes). Based on each publisher's documented recommendation: Qwen → temp 0.6 / top_p 0.95 / top_k 20, Gemma → 1.0 / 0.95 / 64, DeepSeek → 0.6 / 0.95, Mistral → 0.7, Llama 3 → 0.8 / 0.9, Nemotron → 0.6 / 0.95.
+3. **Neutral 0.7** if the family is unknown.
+
+For models downloaded under an older Ka1zen version, a **✨ Reset to publisher defaults** button at the top of the *Generation* section in Edit Model applies the same cascade in one click. A small caption below the button shows what was applied and from which source.
+
 ### General tab
 
 - **Response Style** — presets (Concise, Detailed, Professional, Casual, Technical, Beginner-friendly) and a global custom system prompt.

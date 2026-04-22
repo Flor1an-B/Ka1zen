@@ -3,6 +3,12 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.13] — 2026-04-22
+
+### Added
+- **Publisher-recommended generation defaults applied at install time.** Ka1zen used to create every new model config with `temperature: 0.2`, which produced noticeably flatter output for families whose publishers recommend very different values (Qwen3 official: 0.6, Gemma 3/4: 1.0, DeepSeek-R1: 0.6). When a model is downloaded through Model Manager, Ka1zen now resolves its generation defaults in this order: (1) the repo's own `generation_config.json` if it ships one — fetched locally from the HF cache, or remotely from `huggingface.co/<repo>/raw/main/generation_config.json` with a 5 s timeout; (2) the model family's published recommendation if the repo doesn't ship one (common for community fine-tunes that strip the file) — Qwen → temp 0.6 / top_p 0.95 / top_k 20, Gemma → 1.0 / 0.95 / 64, DeepSeek → 0.6 / 0.95, Mistral → 0.7, Llama 3 → 0.8 / 0.9, Nemotron → 0.6 / 0.95; (3) a neutral 0.7 as last resort. Fields covered: `temperature`, `top_p`, `top_k`, `repetition_penalty`. The remote fetch is bounded to 5 s so a flaky network can't block a model install.
+- **"Reset to publisher defaults" button in the model editor.** Existing configs created before 0.3.13 keep their old values (the auto-resolution only runs at install time, not retroactively). A new button at the top of the *Generation* section in Settings → Models → Edit pulls the same publisher → family → neutral cascade and applies it to the four sliders (temperature, top_p, top_k, repetition penalty) in one click. A short confirmation line under the button shows what was applied and from which source (*"Applied from generation_config.json: temp 0.60, top_p 0.95, top_k 20."* or *"Applied from Qwen family default: …"*). Lets users who downloaded a model under an older version of Ka1zen — or who edited their config into a bad state — get back to the publisher's recommended behaviour without deleting and re-downloading.
+
 ## [0.3.12] — 2026-04-22
 
 ### Fixed
