@@ -3,6 +3,11 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.17] — 2026-04-23
+
+### Fixed
+- **In-app DMG download (Help → Check for Updates → Download Update) now runs at full bandwidth.** The previous implementation iterated `URLSession.shared.bytes(from:)` — an `AsyncSequence<UInt8>` — byte-by-byte, forcing a Swift-level async checkpoint *per byte*. A 15 MB DMG ended up taking 3–7 s regardless of the user's actual connection; on a gigabit link the effective throughput capped at ~2–5 MB/s, nothing to do with GitHub or the network. `UpdateDownloader` now uses a proper `URLSessionDownloadTask`, which lets the URL loading system stream the response straight to disk from its own thread and publish progress through KVO on `task.progress`. Cancellation, destination path, and the "Open DMG / Reveal in Finder" flow are unchanged. Expected: DMG download now saturates the user's connection (sub-second on fast links, bound by bandwidth everywhere else).
+
 ## [0.3.16] — 2026-04-23
 
 ### Changed
