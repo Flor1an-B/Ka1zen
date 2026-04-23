@@ -3,6 +3,14 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.14] — 2026-04-23
+
+### Fixed
+- **Generation stats bar (tokens · t/s · peak memory · model) now survives conversation switches.** The bar was driven by a `@Published var generationStats` held in memory on `ChatViewModel`, not persisted anywhere — so leaving the conversation and coming back wiped it even though the messages themselves were intact. Stats are now attached to the assistant `Message` when the turn completes (`GenerationStats` is now `Codable`, and `Message.generationStats` is an optional field that decodes gracefully on older conversations), and the bar reads from the last assistant message's stats when the live value is absent. The model name shown in the bar also comes from the stats struct now, so switching your active model no longer relabels past turns with the wrong model.
+
+### Changed
+- **System Prompt toolbar button now shows an orange dot when the current conversation has a per-conversation prompt set.** Ka1zen's final system prompt is built from three stacked layers: Settings → General's Response Style preset, Settings → General's global custom prompt, and the per-conversation prompt from this toolbar button — all three are concatenated and sent to the model. The overlap wasn't obvious from the UI: two separate places to edit "the system prompt" and no indication that both applied. The new dot signals that a conversation-specific layer is active on top of the global defaults, and the tooltip (plus a one-line subtitle inside the popover) spells out the layering rule so the behaviour is discoverable from the UI itself.
+
 ## [0.3.13] — 2026-04-22
 
 ### Added
