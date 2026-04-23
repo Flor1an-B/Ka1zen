@@ -3,6 +3,18 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.15] — 2026-04-23
+
+### Added
+- **Redesigned Model Manager → Installed tab.** Each card used to show only name, disk size, and three generic capability badges — not enough to decide which model to launch. The card now packs a proper specs line, a metrics line, and capability badges into the same vertical space, plus a favourites marker, a free-form note, and a right-click menu of common actions. Fields added to each card:
+  - **Architecture line** — `MoE · 3B / 35B · 8-bit · 262K ctx · mlx_lm · 35.2 GB`. Architecture (MoE vs Dense), active / total parameters (parsed from community naming convention, e.g. `-35B-A3B-`), quantization bits (from `config.json` or the `-Nbit` / `mxfpN` suffix), context window, chosen MLX server, and disk size.
+  - **Metrics line** — fit verdict for the current Mac (🟢 Fits · 🟠 Tight · 🔴 Won't fit, computed from model size vs detected RAM), rough generation throughput estimate (`~65 t/s`, computed from active-parameter count × bit width vs the host chip's unified-memory bandwidth), last benchmark result with relative timestamp, and last time the server was actually launched for this model.
+  - **Capabilities badges** — Vision / Tools / Thinking / Audio pulled from the live `config.json`, unchanged in spirit but now on their own row.
+- **Installed tab filter bar.** Search by name / repo ID, sort by Family (grouped, default) · Last used · Name · Size · Throughput, and toggle chip filters: ⭐ Favourites · Running · MoE · Vision · Thinking · Fits my Mac. A *Clear* button appears whenever any filter is active. Useful when the list has grown past a dozen models and the family grouping alone isn't enough.
+- **Favourites, notes, and last-used tracking.** ⭐ star any model to pin it at the top regardless of sort mode; add a short note visible on the card (e.g. *"my go-to for Swift"*). Last-used is recorded when a server actually reaches `running` (not on launch click, so failed starts don't pollute the sort).
+- **Card context menu** — right-click any model to Add/Remove favourite, Add/Edit note, Run benchmark (when running), Copy model ID, Reveal in Finder, Open on HuggingFace, or Delete from disk.
+- **Throughput estimator.** A lightweight `ThroughputEstimator` maps the detected chip (M5 Max / M4 Max / M3 Ultra / M1 Max …) to a rough unified-memory bandwidth and produces a `~NN t/s` generation estimate from the model's active-parameter count and quant bits. Approximations only — a real benchmark still wins — so the number is shown next to (not instead of) the `Bench NN.N t/s` value when both are available.
+
 ## [0.3.14] — 2026-04-23
 
 ### Fixed
