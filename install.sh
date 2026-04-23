@@ -4,8 +4,9 @@
 # Usage: ./install.sh
 #
 # Requirements: macOS 15 Sequoia or newer, on Apple Silicon.
-# This script installs mlx-lm, mlx-vlm, huggingface-hub and mflux into the
-# official python.org Python 3.14+. It does not touch the system Python or Homebrew.
+# This script installs mlx-lm, mlx-vlm, huggingface-hub, hf_transfer and
+# mflux into the official python.org Python 3.14+. It does not touch the
+# system Python or Homebrew.
 
 set -euo pipefail
 
@@ -69,7 +70,7 @@ info "Upgrading pip"
 "$PIP" install --upgrade pip >/dev/null
 
 # --- 3. Install packages ---
-PACKAGES=(mlx-lm mlx-vlm huggingface-hub mflux)
+PACKAGES=(mlx-lm mlx-vlm huggingface-hub hf_transfer mflux)
 
 for pkg in "${PACKAGES[@]}"; do
     info "Installing $pkg"

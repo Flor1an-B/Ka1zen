@@ -3,6 +3,12 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.16] — 2026-04-23
+
+### Changed
+- **Model downloads now match the `hf download` CLI speed.** The previous implementation looped over `siblings` calling `hf_hub_download` file-by-file, which was strictly sequential — a 13-shard MoE like `Qwen3-Next-80B-A3B-6bit` ended up taking ~8× longer than the official CLI. Ka1zen now calls `snapshot_download` (the same entry point the CLI uses) with `max_workers=8`, dispatching concurrent downloads through a `ThreadPoolExecutor`. A custom `AggregateByteProgress` tqdm subclass aggregates per-file `update(n)` calls across threads under a lock so the progress bar stays smooth and monotonic instead of reflecting only the current file's slice. Cache layout, SHA verification, LFS handling, and revision pinning are unchanged — the same underlying `hf_hub_download` is still called per file, just in parallel. End result is byte-identical to a CLI download. Expected speedup: ~5–8× on multi-shard models, limited only by network bandwidth or the HuggingFace CDN.
+- **`hf_transfer` acceleration enabled when installed, and added to the bundled prerequisites.** The Rust-based downloader used by `hf download` can give a further 2–5× speedup when the `hf_transfer` Python package is present. Ka1zen now sets `HF_HUB_ENABLE_HF_TRANSFER=1` in the download subprocess environment, but only after verifying the package can be imported — otherwise `huggingface_hub` would fail loudly. `hf_transfer` is now part of `install.sh` and the *Update Prerequisites* runner (Settings → System Models), so fresh installs and updates pick it up automatically. Existing users can click *Update Prerequisites* to add it.
+
 ## [0.3.15] — 2026-04-23
 
 ### Added

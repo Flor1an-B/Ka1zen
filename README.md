@@ -12,7 +12,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2015%2B-blue" alt="macOS 15+">
   <img src="https://img.shields.io/badge/architecture-Apple%20Silicon-black" alt="Apple Silicon">
-  <img src="https://img.shields.io/badge/version-0.3.15-orange" alt="Version 0.3.15">
+  <img src="https://img.shields.io/badge/version-0.3.16-orange" alt="Version 0.3.16">
   <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-green" alt="PolyForm Noncommercial">
 </p>
 
@@ -126,7 +126,7 @@ The script installs `mlx-lm`, `mlx-vlm`, `huggingface-hub` and `mflux` into your
 
 ```bash
 /Library/Frameworks/Python.framework/Versions/3.14/bin/pip3 install \
-  mlx-lm mlx-vlm huggingface-hub mflux
+  mlx-lm mlx-vlm huggingface-hub hf_transfer mflux
 ```
 
 </details>
