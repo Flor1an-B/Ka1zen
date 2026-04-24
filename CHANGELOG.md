@@ -3,6 +3,16 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.21] — 2026-04-25
+
+### Changed
+- **Orphan-server detection is now wired to every launch path, not just the Model Manager button.** Previously the dialog only fired when the user clicked Launch from Model Manager. Switching models from the chat header picker, or sending a message that auto-started a stopped model, both bypassed the check and silently failed on port collision when a stray server was around. Detection now lives on `AppState.launchModel`; all three call sites — Model Manager Launch, chat picker, chat-send auto-start — go through it. The dialog itself is presented at the root of the window (`ContentView.alert`) so it appears regardless of which view triggered the launch.
+- **Loading a model now stops any same-type sibling Ka1zen owns before launching.** When the user loaded VLM A then VLM B, Ka1zen kept A running and either tried to bind B on the same port (collision) or — worse — started B on the next free port (`nextAvailablePort` returns 8082) and the user ended up with two `mlx_vlm.server` processes fighting for GPU memory. The launcher now stops any same-type Ka1zen-owned server before starting the new one, with a 500 ms grace period for the kernel to release the port. Different-type sibling servers (one LM + one VLM) still coexist as before — that's a legitimate setup.
+
+### Fixed
+- **Selecting a model in the chat picker no longer freezes the app.** The orphan detector runs `ps -ax` and was being called synchronously from the main thread. On a heavy system (Chrome tabs, dev tools, etc.) the subprocess output exceeded the 64 KB pipe buffer; the child blocked writing, the parent blocked on `waitUntilExit`, both deadlocked, and the UI stopped responding (rainbow wheel, force-quit required). The detector is now async — the subprocess runs on a background `Task.detached(priority: .userInitiated)` and the result is returned to `@MainActor` once available.
+- **`OrphanServerDetector.runShell` no longer deadlocks on commands with large output.** The previous order was `process.run()` → `waitUntilExit()` → `readDataToEndOfFile()`. The fix swaps the last two: read first (which drains the pipe progressively as the child writes), then wait for exit (which is then immediate because the child already finished writing). stderr also gets a permanent drain handler to close the same hole on the error channel.
+
 ## [0.3.20] — 2026-04-24
 
 ### Added
