@@ -3,6 +3,15 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.20] — 2026-04-24
+
+### Added
+- **FLUX cache purge in Settings → General → Image Generation.** Ka1zen's image-generation backends (FLUX via `mflux`, Z-Image) write every PNG to `~/var/folders/<user>/T/ka1zen_images/` without ever cleaning up — a heavy user can rack up several GB of generated images over time. The *Image Generation* section now surfaces the current folder size and file count, with an **Open folder** button that drops you inside the directory in Finder and a **Clear cache** button that wipes every file after a confirmation ("Clear N files — this removes XX.X MB"). Clearing keeps the folder itself so the next generation can write straight in; already-generated images referenced from past conversations stop rendering after purge (expected — the files are gone).
+- **Orphan MLX server detection.** When the user force-quits Ka1zen while a model is running, the Python `mlx_lm.server` / `mlx_vlm.server` child is re-parented to launchd and keeps its port bound. The next launch then fails with a cryptic "address already in use" error. Ka1zen now scans `ps -ax` for MLX server processes it doesn't own *before* trying to start a new one; when one is found, an alert surfaces the orphan's model ID, port, and PID along with *Kill & launch* / *Cancel* buttons. *Kill & launch* sends `SIGTERM`, waits 500 ms for the OS to release the port, then proceeds with the launch on a freshly-allocated port.
+
+### Fixed
+- **Generated images now render at their actual position in the message flow.** Every `[IMAGE:path]` marker was previously extracted by a SwiftUI `ForEach` placed above the text body, so every generated image ended up docked to the top of the bubble regardless of where it sat in the content. This looked fine for the plain "draw a dragon" path (a one-line prompt followed by the image), but broke the attach-and-reproduce pipeline: the image was up above a 200-line analysis, so users scrolled down to the `**FLUX reproduction**` header, saw no image, and concluded the generation had failed. A new `.image(path)` `RenderBlock` is emitted by `splitIntoBlocks` whenever a `[IMAGE:path]` marker appears on its own line, rendered inline via `inlineImageView` — the picture lands right under the heading that introduces it. Placeholder ("Loading image…") appears briefly if the file isn't yet readable, then re-renders to the actual PNG once FLUX finishes the write.
+
 ## [0.3.18] — 2026-04-24
 
 ### Added
