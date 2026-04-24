@@ -3,6 +3,14 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.18] — 2026-04-24
+
+### Added
+- **Attach + reproduce pipeline** — a third grounded image-generation path alongside the existing "plain FLUX" and "web search + FLUX" branches. When the user attaches one or more images AND asks for a reproduction (keywords: *reproduis / reproduire / recrée / replicate / recreate / réplique / copie* — or a combined *analyse + génère une image* pattern), Ka1zen now runs: (1) the vision-capable chat model streams a detailed analysis of the attached image into the assistant turn as normal; (2) once the chat completes, that analysis is condensed by a small LLM pass (`synthesizeReproductionPrompt`) into a dense ~120-word FLUX prompt; (3) FLUX generates a reproduction, which is appended to the same assistant message alongside the original analysis. Tests the full vision → description → generation loop end-to-end in one turn.
+
+### Fixed
+- **Image attachments are no longer silently discarded by the FLUX-only paths.** The `isImageGenerationRequest` detector's flexible "verb + image-noun" matcher was triggering on phrases like *"pour générer une image"* buried inside analysis briefs, sending the prompt through the text-only FLUX path — the attached image was dropped, and the optimizer LLM (called without the image) replied *"I'm sorry, no image was attached"*. Both the `isImageGenerationRequest` and `isSearchAndGenerateRequest` branches are now gated on `imagesToSend.isEmpty` so the attachment is preserved whenever present; the dedicated reproduce pipeline handles the legitimate "attach + regenerate" intent, and everything else flows through the regular chat VLM path.
+
 ## [0.3.17] — 2026-04-23
 
 ### Fixed
