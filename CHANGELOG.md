@@ -3,6 +3,14 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.22] — 2026-04-25
+
+### Added
+- **Support for the Qwen3.6 family — including the `Qwen3.6-27B-OptiQ-4bit` text-only checkpoint.** This OptiQ build is a derivative of the standard Qwen3.6 base model (architecture `Qwen3_5ForCausalLM`, no `vision_config` in `config.json`), so Ka1zen correctly detects it as text-only — there is no vision encoder to load. Only Qwen variants with the explicit `-VL-` suffix (Qwen2-VL, Qwen3-VL, Qwen3.5-VL, Qwen3.6-VL…) carry an image encoder; non-VL Qwen3.6 quants run on `mlx_lm.server` and stream text exclusively. Other Qwen3.6 variants whose `config.json` ships a `vision_config` (e.g. `Qwen3.6-35B-A3B-8bit`) are still detected as VLM and routed to `mlx_vlm.server` as before — detection is per-model from the actual config, never name-pattern based.
+
+### Fixed
+- **Generation stats (`tokens`, `t/s`) now reappear under the chat for newer mlx_lm.server builds.** mlx_lm 0.31+ dropped the legacy "always-emit-usage" behavior in favor of the OpenAI-spec `stream_options.include_usage` opt-in, and on top of that no longer publishes the `generation_tps` extension field. With Qwen3.5/3.6 architectures and OptiQ-quantized builds the bar simply showed nothing. Three-part fix: (1) the chat request now sets `stream_options: { include_usage: true }` so the server emits a final `{"choices":[], "usage":{...}}` chunk; (2) the SSE parser handles that usage-only chunk before the choices guard (it used to be silently skipped) and waits for a trailing chunk after `finish_reason` for non-VLM endpoints rather than breaking the stream loop on the spot; (3) when the server omits `generation_tps` (mlx_lm 0.31.x), Ka1zen measures it client-side via `ContinuousClock` between the first and last streamed token and falls back to that value. mlx_vlm.server keeps its inline-`usage` path and immediate-break behavior — that flow has not changed.
+
 ## [0.3.21] — 2026-04-25
 
 ### Changed
