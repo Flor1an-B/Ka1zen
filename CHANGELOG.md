@@ -21,9 +21,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   - `Show me 7 paintings by Van Gogh` → 7 painting reproductions
   - `4 images of MacBook Pro 16-inch` → 4 product shots
   - `2 images of Zendaya at the Met Gala, 3 of Mario, 3 of Cristiano Ronaldo` → **8 images total via 3 parallel sub-calls**, one per subject
-  - `5 of Tokyo, 5 of Osaka, 5 of Kyoto` → **15 images** in three parallel calls (subject inferred from each segment, no noun repeat needed)
+  - `2 of Tokyo, 2 of Osaka, 2 of Kyoto` → **6 images** in three parallel calls (subject inferred from each segment, no noun repeat needed)
 
-  **Limits:** **10 images max per call** (higher counts are silently capped); no overall cap on parallel sub-calls so *"5 of A, 5 of B, 5 of C"* yields 15 images in three parallel queries; per-image hard limits are **5 MB / 10 s timeout** (oversized or slow images are dropped silently). Images land in the existing `ka1zen_images` cache and the FLUX *Clear cache* button in *Settings → General → Image Generation* wipes them too. Disabled when the chat toolbar's *Web Search* toggle is off.
+  **Limits:** **10 images max per call** (higher counts are silently capped); no overall cap on parallel sub-calls but in practice past ~10 total images per turn the chat scrolls awkwardly and bandwidth piles up; per-image hard limits are **5 MB / 10 s timeout** (oversized or slow images are dropped silently). Images land in the existing `ka1zen_images` cache and the FLUX *Clear cache* button in *Settings → General → Image Generation* wipes them too. Disabled when the chat toolbar's *Web Search* toggle is off.
 
   **Implementation note:** the tool calls DuckDuckGo's per-session `vqd` token endpoint and downloads thumbnails via DDG's `external-content.duckduckgo.com` proxy first (anti-hotlink-friendly), falling back to the original full-resolution URL when the thumbnail fails. The HTTP session is now ephemeral so DDG anti-bot cookies can't accumulate between calls — an earlier draft kept the shared cookie jar and stopped working after 2–3 vqd fetches in the same chat turn.
 

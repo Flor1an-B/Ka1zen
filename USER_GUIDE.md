@@ -197,12 +197,12 @@ Ka1zen can fetch real photos from DuckDuckGo Images and display them inline in t
 | `Show me 3 pictures of Mount Fuji at sunrise` | 3 images, inline |
 | `Find 6 photos of vintage Porsche 911s` | 6 images, inline |
 | `2 images of Zendaya at the Met Gala, 3 of Mario, 3 of Ronaldo` | **8 images total** — three parallel sub-calls, one per subject |
-| `5 of Tokyo, 5 of Osaka, 5 of Kyoto` | 15 images via three parallel calls (subject inferred from each segment) |
+| `2 of Tokyo, 2 of Osaka, 2 of Kyoto` | 6 images via three parallel calls (subject inferred from each segment) |
 
 **Limits:**
 
 - **10 images max per call.** Higher numbers are silently capped.
-- **No global cap on parallel sub-calls.** *"5 of A, 5 of B, 5 of C"* runs three calls in parallel for 15 images total. Beware: past 10–15 images the chat scrolls awkwardly and bandwidth piles up (each image up to 5 MB).
+- **No global cap on parallel sub-calls** but in practice keep counts modest. *"2 of A, 2 of B, 2 of C"* (6 images) reads cleanly; pushing past ~10 total images per turn makes the chat scroll awkwardly and piles up bandwidth (each image up to 5 MB).
 - **5 MB max per image, 10 s timeout per fetch.** Larger or slower images are skipped silently — you'll see *N* images instead of *N+1*.
 - **Disabled when *Web Search* is off.** The toggle in the chat toolbar gates both `web_search` and `web_image_search`.
 
