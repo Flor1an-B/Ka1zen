@@ -3,6 +3,23 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.24] — 2026-04-26
+
+### Added
+- **Multilingual UX heuristics — Portuguese, Spanish, German and Italian.** Until now Ka1zen's *"smart routing"* layer (image-search intent parser, web-search auto-trigger, freshness keywords, trivial-greeting filter) was tuned for French and English only — non-FR/EN speakers got the LLM's natural multilingual response but missed the supporting heuristics that decide *when* to call which tool. v0.3.24 brings the four most-requested European languages on board across three subsystems:
+
+  1. **Image-search intent (`WebImageSearchTool.parseImageRequests`)** now recognises imperative verbs and image nouns in PT/ES/DE/IT, and strips the corresponding determiners from the captured subject so DDG sees the bare topic. *"Mostra 5 immagini di Roma"*, *"Muéstrame 3 fotos de Madrid"*, *"Zeig mir 4 Bilder von Berlin"* and *"Mostre 5 fotos do Cristo Redentor"* all trigger the auto-execute path on the first try.
+  2. **Freshness-keyword + DDG `df=` filter (`WebSearchTool.temporalContext`)** picks up time-sensitive phrasing in the new languages — *ultime notizie / ultime / oggi* (IT), *últimas / hoy / noticias* (ES), *aktuell / heute / nachrichten* (DE), *últimas / hoje / notícias* (PT) — and routes them through the matching `df=d` / `df=w` / `df=m` recency bucket so the user actually gets pages from this week, not 2024 keyword matches.
+  3. **Trivial-greeting + self-referenced-content gate (`ChatViewModel.needsWebSearch`)** no longer wastes a 3-second web search on *"Olá / Obrigado"*, *"Hola / Gracias"*, *"Hallo / Danke"*, *"Ciao / Grazie"*, and skips lookups for processing commands like *"Riassumi questo testo"*, *"Resume este texto"*, *"Resumir este texto"*, *"Fasse diesen Text zusammen"*.
+
+  **Italian example — *"Mostra 5 immagini di Roma"* on Qwen3.6-35B-A3B-8bit:**
+
+  <p align="center">
+    <img src="assets/screenshots/07-web-image-search-italian.png" width="640" alt="Italian image search demo — 'Mostra 5 immagini di Roma' returns 5 inline photos of the Colosseum and other Roman landmarks">
+  </p>
+
+  Conjunctions in segment-splitting are also extended (*e* for PT/IT, *y* for ES, *und* for DE, *más* / *mais*) so compound asks like *"3 di Roma e 3 di Milano"* fan out to two parallel sub-calls. Chinese and Japanese are deliberately not in this batch — CJK requires a separate parser (no whitespace, classifier-particles like 张/枚) and we'd rather wait for a real native-speaker bug report than ship an untested heuristic.
+
 ## [0.3.23] — 2026-04-26
 
 ### Added

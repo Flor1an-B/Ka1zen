@@ -176,7 +176,16 @@ The model can call `fetch_page` to retrieve the full content of a specific URL �
 
 Ka1zen can fetch real photos from DuckDuckGo Images and display them inline in the chat. **No FLUX, no generation** — it's pure web download of the actual images, cached locally and rendered exactly like a generated image bubble.
 
-**How to trigger** — phrase your message with a count followed by an image noun (`image`, `images`, `photo`, `photos`, `picture`, `pictures`, `pic`, `pics`). A leading verb (*affiche / montre / show / display / find*) is helpful but not required.
+**How to trigger** — phrase your message with a count followed by an image noun. Six languages are recognised:
+
+- **EN** — `image / images / photo / photos / picture / pictures / pic / pics`, verbs *show / display / find / fetch*
+- **FR** — `image(s) / photo(s)`, verbs *affiche / montre / trouve / cherche*
+- **PT** — `imagem / imagens / foto / fotos / retrato(s)`, verbs *mostre / mostra / exiba / busque*
+- **ES** — `imagen / imágenes / foto / fotos / retrato(s)`, verbs *muestra / muéstrame / enséñame / busca*
+- **DE** — `Bild / Bilder / Foto / Fotos / Aufnahme(n)`, verbs *zeig / zeige / suche / finde*
+- **IT** — `immagine / immagini / foto / fotografia / fotografie`, verbs *mostra / mostrami / fammi vedere / cerca*
+
+A leading verb is helpful but not required — a bare *N image-noun* pattern is enough on its own. Determiners in the captured subject (*the / le / la / les / del / di / der / die / das / do / da*…) are stripped automatically.
 
 **Examples that work:**
 
