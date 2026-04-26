@@ -12,7 +12,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2015%2B-blue" alt="macOS 15+">
   <img src="https://img.shields.io/badge/architecture-Apple%20Silicon-black" alt="Apple Silicon">
-  <img src="https://img.shields.io/badge/version-0.3.22-orange" alt="Version 0.3.22">
+  <img src="https://img.shields.io/badge/version-0.3.23-orange" alt="Version 0.3.23">
   <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-green" alt="PolyForm Noncommercial">
 </p>
 
@@ -52,7 +52,8 @@ Ka1zen is a native macOS app that runs open large-language models **locally** on
 | 🖼 **Vision** | Drop images into the chat — Gemma 4, Pixtral, Mistral Small VLM, Qwen2-VL, LLaVA |
 | 🎙 **Audio** | Speak to the model, it answers (Gemma 4) |
 | 🧠 **Thinking mode** | Watch the model reason before answering (Qwen3, DeepSeek-R1, Gemma 3/4…) |
-| 🌐 **Web search** | DuckDuckGo + page fetch, with clickable `[1]`-style citations |
+| 🌐 **Web search** | DuckDuckGo + page fetch, with clickable `[1]`-style citations and date-aware queries |
+| 📸 **Inline web images** | Ask *"affiche 5 photos du Japon"* / *"show me 3 pictures of Mario"* — DuckDuckGo Images is queried, results downloaded, displayed inline (up to 10 per call) |
 | 🎨 **Image generation** | FLUX.2-klein-9B locally via `mflux` — natural-language trigger, optional web-search grounding |
 | 📚 **RAG** | Index PDFs, text, code — local embeddings (Apple NLEmbedding), SQLite storage |
 | 🔎 **Token Inspector** | Per-token logprobs visualisation — spot hallucinations |

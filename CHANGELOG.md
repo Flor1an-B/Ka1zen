@@ -3,6 +3,37 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.23] — 2026-04-26
+
+### Added
+- **Inline web images via the new `web_image_search` tool.** Ka1zen can now fetch and display real photos from DuckDuckGo Images directly in the chat — *no FLUX, no AI generation*, just actual web images downloaded and rendered inline like the existing FLUX bubbles. Triggered by any user message that contains a count followed by an image noun (`image / images / photo / photos / picture / pictures / pic / pics`); a leading verb like *affiche / montre / show / display* is helpful but no longer required. The pre-execution path runs even on VLM endpoints (mlx_vlm.server doesn't carry tool definitions to its models, so the chat layer parses the intent and calls the tool itself before the LLM ever streams a token).
+
+  **How to ask for images** — examples that all work today:
+  - `Show me 5 photos of Japan` → 5 images of Japan
+  - `Display 10 pictures of Mario` → 10 images of Mario
+  - `2 images of Zendaya at the Met Gala` → 2 images, no verb needed
+  - `3 photos of Cristiano Ronaldo` → 3 images
+  - `Find me 4 images of the Eiffel Tower at night` → 4 night shots
+  - `Show 6 pictures of golden retriever puppies` → 6 puppy photos
+  - `Display 5 photos of the Tesla Cybertruck` → 5 product images
+  - `Show me 8 images of the Northern Lights in Iceland` → 8 images
+  - `5 photos of Tokyo street food` → 5 images, no verb needed
+  - `Show me 7 paintings by Van Gogh` → 7 painting reproductions
+  - `4 images of MacBook Pro 16-inch` → 4 product shots
+  - `2 images of Zendaya at the Met Gala, 3 of Mario, 3 of Cristiano Ronaldo` → **8 images total via 3 parallel sub-calls**, one per subject
+  - `5 of Tokyo, 5 of Osaka, 5 of Kyoto` → **15 images** in three parallel calls (subject inferred from each segment, no noun repeat needed)
+
+  **Limits:** **10 images max per call** (higher counts are silently capped); no overall cap on parallel sub-calls so *"5 of A, 5 of B, 5 of C"* yields 15 images in three parallel queries; per-image hard limits are **5 MB / 10 s timeout** (oversized or slow images are dropped silently). Images land in the existing `ka1zen_images` cache and the FLUX *Clear cache* button in *Settings → General → Image Generation* wipes them too. Disabled when the chat toolbar's *Web Search* toggle is off.
+
+  **Implementation note:** the tool calls DuckDuckGo's per-session `vqd` token endpoint and downloads thumbnails via DDG's `external-content.duckduckgo.com` proxy first (anti-hotlink-friendly), falling back to the original full-resolution URL when the thumbnail fails. The HTTP session is now ephemeral so DDG anti-bot cookies can't accumulate between calls — an earlier draft kept the shared cookie jar and stopped working after 2–3 vqd fetches in the same chat turn.
+
+### Changed
+- **Web search query is now anchored to today's date, not just the year.** The tool description sent to the LLM at every selection now interpolates the long-form date (e.g. `Today is Sunday, April 26, 2026.`), and the system-prompt rule that previously read *"always include `<year>` in your search queries"* has been replaced with a granular set: full date for *today / tonight / aujourd'hui*, month + year for *latest / news / breaking / release / sortie / annonce*, year only for weather/prices, and no injection at all for intemporal queries or URLs. DuckDuckGo's `df=` recency filter (`d` past day, `w` past week, `m` past month) is now passed through automatically for the same buckets — *"dernières actualités en France"* now actually returns pages from this week, not random keyword matches from 2024. Search results are also prefixed with the retrieval timestamp so the LLM has an explicit temporal anchor when it phrases the answer.
+- **Image-intent parser is more permissive.** The previous version required both a verb (*affiche / show / display*) **and** a noun (*image / photo*) to fire — phrasings like *"2 images of Mount Fuji"* missed because no verb was present. The parser now accepts a bare *N image(s)/photo(s)* pattern as sufficient intent on its own, and strips French/English determiners (`du`, `de la`, `des`, `le`, `la`, `les`, `l'`, `the`, `a`, `an`, `of the`) from the captured subject so DDG receives *"japon"* instead of *"du japon"*.
+
+### Fixed
+- **`web_image_search` no longer dies after a few vqd token fetches.** The DuckDuckGo image search endpoint requires a per-session token scraped from the regular search HTML; the previous draft used `URLSession`'s shared cookie storage and after 2–3 calls DDG started returning a JS interstitial without the token, breaking every subsequent image search in the same chat. The session is now ephemeral, the regex set tolerates curly quotes / escaped quotes / bare-token forms, and a diagnostic log line (Console.app, subsystem `com.ka1zen`, category `WebImageSearch`) now surfaces the HTML size + first 200 chars when extraction fails — making future format rotations triage-able instead of mysterious.
+
 ## [0.3.22] — 2026-04-25
 
 ### Added

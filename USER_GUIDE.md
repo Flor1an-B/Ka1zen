@@ -17,7 +17,7 @@
 3. [Interface overview](#3-interface-overview)
 4. [Conversations & chat](#4-conversations--chat)
 5. [Attachments & files](#5-attachments--files)
-6. [Web search & tools](#6-web-search--tools)
+6. [Web search, web images & tools](#6-web-search--tools)
 7. [Thinking mode (reasoning)](#7-thinking-mode-reasoning)
 8. [Image generation (FLUX.2)](#8-image-generation-flux2)
 9. [Document library (RAG)](#9-document-library-rag)
@@ -152,7 +152,7 @@ When library documents are attached to a conversation, a bar appears at the top 
 
 ---
 
-## 6. Web search & tools
+## 6. Web search, web images & tools
 
 ### Enable tools
 
@@ -171,6 +171,44 @@ Responses cite sources as `[1]`, `[2]`… Each marker is clickable and opens the
 ### `fetch_page` tool
 
 The model can call `fetch_page` to retrieve the full content of a specific URL — complements automatic search.
+
+### Inline web images (`web_image_search`)
+
+Ka1zen can fetch real photos from DuckDuckGo Images and display them inline in the chat. **No FLUX, no generation** — it's pure web download of the actual images, cached locally and rendered exactly like a generated image bubble.
+
+**How to trigger** — phrase your message with a count followed by an image noun (`image`, `images`, `photo`, `photos`, `picture`, `pictures`, `pic`, `pics`). A leading verb (*affiche / montre / show / display / find*) is helpful but not required.
+
+**Examples that work:**
+
+| Prompt | Result |
+|---|---|
+| `Show me 5 photos of Japan` | 5 images of Japan, inline |
+| `Display 10 pictures of Mario` | 10 images, inline |
+| `2 images of Zendaya at the Met Gala` | 2 images, inline (no verb needed) |
+| `3 photos of Cristiano Ronaldo` | 3 images, inline |
+| `Find me 4 images of the Eiffel Tower at night` | 4 images, inline |
+| `Show 6 pictures of golden retriever puppies` | 6 images, inline |
+| `Display 5 photos of the Tesla Cybertruck` | 5 images, inline |
+| `Show me 8 images of the Northern Lights in Iceland` | 8 images, inline |
+| `5 photos of Tokyo street food` | 5 images, no verb needed |
+| `Show me 7 paintings by Van Gogh` | 7 images of paintings, inline |
+| `4 images of MacBook Pro 16-inch` | 4 product photos, inline |
+| `Display 5 photos of the Lamborghini Revuelto` | 5 images, inline |
+| `Show me 3 pictures of Mount Fuji at sunrise` | 3 images, inline |
+| `Find 6 photos of vintage Porsche 911s` | 6 images, inline |
+| `2 images of Zendaya at the Met Gala, 3 of Mario, 3 of Ronaldo` | **8 images total** — three parallel sub-calls, one per subject |
+| `5 of Tokyo, 5 of Osaka, 5 of Kyoto` | 15 images via three parallel calls (subject inferred from each segment) |
+
+**Limits:**
+
+- **10 images max per call.** Higher numbers are silently capped.
+- **No global cap on parallel sub-calls.** *"5 of A, 5 of B, 5 of C"* runs three calls in parallel for 15 images total. Beware: past 10–15 images the chat scrolls awkwardly and bandwidth piles up (each image up to 5 MB).
+- **5 MB max per image, 10 s timeout per fetch.** Larger or slower images are skipped silently — you'll see *N* images instead of *N+1*.
+- **Disabled when *Web Search* is off.** The toggle in the chat toolbar gates both `web_search` and `web_image_search`.
+
+**On-disk cache:** images live in `~/var/folders/<user>/T/ka1zen_images/web_*.{jpg,png,webp,gif}`. Wipe via *Settings → General → Image Generation → Clear cache* — same dropbox as the FLUX cache.
+
+**Privacy:** every image is fetched directly from a third-party host (your IP is exposed to that host), although thumbnails go through DuckDuckGo's `external-content.duckduckgo.com` proxy and are typically used as the first choice.
 
 ### When to disable tools
 
