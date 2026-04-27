@@ -3,6 +3,13 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.26] — 2026-04-27
+
+### Changed
+- **Continue button now hides on responses that look complete.** v0.3.25 showed the blue **Continue** capsule on every assistant turn that ended cleanly with `finish_reason=stop`, which in practice meant *every* normal completion — short answers, polished closing sentences, finished code blocks — all carried a visible "do you want more?" prompt the user almost never wanted. The visible button is now gated on a *looks-truncated* heuristic and appears only when the message ends with something that suggests mid-flow content: a lowercase letter, a `,` / `:` / `;`, an isolated `*` / `-` bullet marker, an open bracket, etc. The button stays hidden when the last non-whitespace character is sentence-final punctuation (`.`, `!`, `?`, `…`), one of those followed by a closing quote/bracket (`")`, `."`, `?"`, `]`, `»`), or a closed fenced code block (\`\`\`).
+
+  The right-click **context menu** Continue item is **unaffected** and still shows on every cleanly-stopped assistant turn — handy when a long-form ask ends with a polished closing sentence the heuristic flags as complete (a 2k-token *"exhaustive dissertation"* ending in `.` looks done to the heuristic, but the user knows they want more). Removes the persistent UI noise without losing the recovery path.
+
 ## [0.3.25] — 2026-04-27
 
 ### Added
