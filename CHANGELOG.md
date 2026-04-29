@@ -3,6 +3,16 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.28] — 2026-04-29
+
+### Fixed
+- **Inline `[IMAGE:/path]` markers no longer leak as raw text in image-search replies.** The block splitter only lifted markers into a dedicated `.image` block when they sat alone on a line; if the model glued one to surrounding prose (e.g. `[IMAGE:/var/folders/sh/.../web_F8BB98FD.jpg]Je m'excuse pour la confusion…` on a single line), the whole token rendered as literal text and the user saw the file path in the bubble — a regression visible right after the auto-search images on Gemma-4 in particular. `splitIntoBlocks` now normalises every `[IMAGE:/path]` onto its own line via a regex pass *before* splitting, so the existing image-block branch catches them regardless of position.
+- **`web_image_search` auto-trigger no longer fires the auto-continue chain on Gemma-4 capability disclaimers.** When Gemma followed the pre-fetched images with text like *"je suis un modèle de langage basé sur le texte et je ne possède pas la capacité technique d'afficher de véritables fichiers images…"*, the trailing colon / unfinished sentence flipped `Message.looksTruncated` to `true` and the v0.3.27 auto-continue chain pumped 1–3 more turns of the same drift into the bubble. `shouldAutoContinue` now short-circuits on any assistant message containing `[IMAGE:` — those replies are intentionally short by design and don't need continuation.
+- **Reply language now matches the user's last message, not the system prompt's language.** A user-defined global custom prompt written in French saying *"Réponds toujours dans la langue de la demande"* was paradoxically pushing Gemma-4 to reply in French even on English questions like *"Explain to me the quantification of open-source models"* — the meta-instruction *"language of the request"* is too abstract for the model to disentangle from the surrounding French text it's embedded in, so it defaults to mirroring the prompt's own language. `buildWireMessages` now appends a final `LANGUAGE OF RESPONSE:` directive, after every other system clause, naming the detected language explicitly: *"The user's most recent message is in English. Reply in English. Ignore the language used elsewhere in this system prompt."* Detection runs on the last user message via `NLLanguageRecognizer` (≥12 chars, confidence ≥0.6) and covers EN/FR/ES/DE/IT/PT/NL/JA/KO/ZH/RU/AR; outside that set the directive is omitted rather than guessed.
+
+### Changed
+- **System prompt on the `web_image_search` auto-execute path is now stricter about Gemma's "I cannot display images" reflex.** The previous `STRICT RULES` block told the model not to say *"I cannot display images"* but didn't address the broader pattern (apologies, recommendations to use Google Images instead, framing the rendered photos as *"des simulations"*). The new `STRICT OUTPUT FORMAT` block names those explicit failure modes, mandates that nothing follow the last `[IMAGE:]` marker (no closing remark, no offer to help further), and reiterates that markers must never be glued to surrounding text on the same line — closing the loop with the renderer fix above.
+
 ## [0.3.27] — 2026-04-29
 
 ### Added
