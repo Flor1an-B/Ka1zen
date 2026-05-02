@@ -3,6 +3,14 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.30] — 2026-05-02
+
+### Changed
+- **Settings → System Models → Update prerequisites now reports per-package outcomes.** Until v0.3.30 every step that exited cleanly showed the same green checkmark with no detail text, and the footer always read *"All packages up to date"* — even when something had actually been upgraded. The user had to dig through the live `pip` log to know whether a `pip install -U mlx-lm` had pulled a new wheel or just reported `Requirement already satisfied`. `PrerequisiteUpdater` now parses pip's stdout (and `uv tool upgrade` output for the mflux path) to classify every step as one of `installed (X.Y.Z)`, `updated (A.B.C → X.Y.Z)`, or `no update available (X.Y.Z)`. Each row in the sheet shows the matching trailing text, and the footer summary becomes *"All packages already up to date"* / *"N package(s) updated"* / *"N updated · M already up to date"* depending on the actual outcome. All successful states share the same green-fill checkmark — an interim build used a different icon for `upToDate` (outlined check) which read as "incomplete / pending" to users; the trailing text alone differentiates the cases now.
+
+### Fixed
+- **`hf_transfer` and `mflux` no longer fall back to a mute green check** in the Update prerequisites sheet. The first iteration of the per-package outcome parser normalised package names to the hyphenated form (`hf-transfer`) before matching pip's output, but pip preserves the user-supplied `_` form (`Requirement already satisfied: hf_transfer`) so the `Requirement already satisfied:` regex never matched and the parser fell back to a generic `.success` with no detail text. The matcher now tries both `hf_transfer` and `hf-transfer` simultaneously. The mflux path via `uv tool upgrade` was likewise mis-parsed because `uv` prints `Nothing to upgrade` instead of pip's `Already up-to-date: mflux`; that string is now also recognised as the "already up to date" sentinel.
+
 ## [0.3.29] — 2026-05-02
 
 ### Added
