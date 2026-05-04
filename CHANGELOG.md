@@ -3,6 +3,40 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.31] — 2026-05-04
+
+### Added
+
+- **Image-to-image editing via FLUX.2-Klein-Edit and Qwen-Image.** Until v0.3.31 the image pipeline was strictly text-to-image — attaching a photo and asking *"change la couleur de la robe en bleu"* got you a long apology from the chat model about *"je n'ai pas la capacité technique de manipuler directement les pixels"*. The full editing flow now routes through mflux's dedicated edit binaries (`mflux-generate-flux2-edit`, and the gen+edit-in-one `mflux-generate-qwen`):
+  - **Pin from any rendered image.** Right-click any FLUX-generated, web-search, or user-uploaded image in the conversation → **Use as edit source**. The pinned image is highlighted in its bubble with a 2 px purple border + a small **Source** badge top-left so the active target is unambiguous.
+  - **Hover-to-pin button.** Generated and web-search images carry a 1-click pencil overlay top-right that fades in on hover — context menu still works, but the overlay covers the most common case (just-generated → iterate on it).
+  - **Composer banner.** When a pin is active, a brand-coloured banner appears above the text input showing the thumbnail, filename, and a × button to clear. The next image-generation prompt is routed through the edit binary with the pinned path injected as `--image-paths` (FLUX, plural — multi-image composites supported) or `--image-path` (Qwen, singular).
+  - **Source-image dimensions preserved.** mflux's edit CLI defaults `--width`/`--height` to the source image's own dimensions when those flags are omitted, so a portrait input is no longer reframed to a 1024×1024 square. The Python fallback (`Flux2Klein.generate_image`) reads source dimensions via PIL and rounds to the nearest multiple of 16 (FLUX architectural requirement).
+  - **Attach + edit-verb short-circuit.** Attaching an image AND typing an edit verb (`edite`, `modifie`, `change`, `transforme`, `make it`, `add`, `remove`, `replace`…) — multilingual: FR / EN / ES / DE / IT / PT — bypasses the chat model entirely and routes the attachment straight to mflux. The detection critically gates on the raw `imageAttachments` list (never emptied) rather than `imagesToSend` (which the vision-guard nulls when the chat model can't see images), and skips the `wantTools` check because editing happens fully outside the LLM round-trip — VLM-server routes (where `supportsTools=false`) can still trigger the path. The vision-guard's *"model does not support vision"* alert is also suppressed in this case because mflux doesn't need vision either.
+  - **One-shot pin lifecycle.** The pin auto-clears after the next generation (success or failure), so the result becomes a candidate for re-pinning to iterate. Conversation switch / app relaunch also clear it — the pin is transient UI state, never persisted.
+  - Pinned image data is materialised into the shared `ka1zen_images/` cache via a `materializeImage(data:)` helper so mflux always reads from a stable file path, regardless of whether the source was an in-memory upload or already on disk.
+
+- **Qwen-Image — new image-generation family alongside FLUX and Z-Image.** Previously, downloading any Qwen-Image variant (e.g. `mlx-community/Qwen-Image-2512-8bit`) made it appear in the chat-model picker (because `ModelFamily.detect` matched the substring `qwen`) and selecting it for image generation routed to `FluxBackend`, which called `mflux-generate-flux2 --base-model dev` — completely the wrong binary for a Qwen architecture. Three changes:
+  - `ModelFamily` now distinguishes `.qwenImage` from `.qwen`. Detection is order-sensitive: `qwen-image` / `qwenimage` / `qwen_image` substring is checked **before** the bare `qwen` pattern (the same trick that keeps Pixtral from being swallowed by `mistral`).
+  - `.qwenImage.isChatFamily = false` → the family is excluded from the chat selector, just like `.flux` and `.zImage`. Settings → System Models → Image Generation now lists `.qwenImage` alongside the existing two families.
+  - New `QwenImageBackend` in `ImageGenerationTool.swift` calls `mflux-generate-qwen` with `--model <full-HF-id> --base-model qwen`. Image-to-image is supported via `--image-path` (singular here, vs. `--image-paths` plural on flux2-edit), so the same pin / hover / banner UX works transparently with Qwen-Image as with FLUX. The same backend handles both t2i and edit modes — gated on whether `--image-path` is present — so no separate `-edit` variant.
+
+- **Model integrity verification — Verify Integrity button per model.** New `IntegrityChecker` (singleton `@MainActor ObservableObject`) hashes every LFS-tracked blob in a model's HF cache and compares the SHA-256 to the blob's filename. At HuggingFace, large file blobs are content-addressed: the filename **is** the SHA-256, so verification is fully offline — no API call required. Streamed in 1 MB chunks via `CryptoKit.SHA256` to keep memory bounded regardless of file size (verifying a 50 GB model uses ~1 MB of RAM). Right-click a model in the Model Manager → **Verify integrity** to start. Status badge appears in the card:
+  - `.unverified` (default) → no badge — we don't want the card to look "incomplete" just because the user hasn't run a check
+  - `.verifying(progress, currentFile)` → spinner + percentage + name of the currently-hashing blob, with an inline ✕ to cancel
+  - `.verified` → green ✓ *Integrity verified*
+  - `.failed(reason)` → red ⚠ with the failing blob's short hash
+  - Status is in-memory only — a fresh launch starts every model at `.unverified`. Persisting across launches would tempt users to trust a stale verdict; the disk could have rotted between sessions
+  - 40-character SHA-1 git blobs (used for small files like `config.json`, where the filename is `sha1("blob "+size+"\0"+content)` rather than a plain content hash) are skipped silently — they're tiny and the realistic corruption surface is the multi-GB safetensors weights, which are LFS
+
+### Fixed
+
+- **"Installed" label was assigned to in-progress and aborted downloads.** `HuggingFaceClient.installedModels()` previously returned every `~/.cache/huggingface/hub/models--<owner>--<name>/` directory, treating bare folder existence as proof of installation. But `huggingface_hub.snapshot_download` creates that directory at the very start of a download — before any blob has been written — and writes blobs as `<sha>.incomplete` files that get atomically renamed only on per-file completion. A user who quit Ka1zen mid-download, or whose network dropped, would relaunch and see the model listed as ready to launch — at which point `mlx_lm.server` would crash on the missing/partial weights. `installedModels()` now applies a four-cumulative-check filter: `blobs/` exists and is non-empty, no `*.incomplete` files in it, `snapshots/<commit>/` exists, and every regular file in the resolved snapshot tree (recursive — diffusion models keep weights in `transformer/`, `text_encoder/`, `vae/` subfolders) has a non-empty target reachable via `attributesOfItem(atPath:)` (which throws on broken symlinks). Edge cases caught:
+  - The user-reported `models--black-forest-labs--FLUX.1-Kontext-dev` ghost — `refs/` only, no `blobs/`, presumably an early `huggingface_hub` failure that left a skeleton directory.
+  - In-flight downloads whose `<sha>.incomplete` blobs haven't been renamed yet.
+  - Snapshots whose blob targets were manually deleted or moved, leaving dangling symlinks.
+  - Re-clicking **Download** on a previously-partial model resumes from the existing `.incomplete` files automatically — `huggingface_hub` handles that natively, no Ka1zen-side state required.
+
 ## [0.3.30] — 2026-05-02
 
 ### Changed

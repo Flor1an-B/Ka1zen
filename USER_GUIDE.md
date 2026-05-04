@@ -5,7 +5,7 @@
 <h1 align="center">Ka1zen — User Guide</h1>
 
 <p align="center">
-  <strong>Local AI for Apple Silicon</strong> · Version 0.3.1 · by Florian Bertaux
+  <strong>Local AI for Apple Silicon</strong> · Version 0.3.31 · by Florian Bertaux
 </p>
 
 ---
@@ -237,13 +237,15 @@ Click the **brain / lightbulb** icon in the toolbar to toggle thinking. The reas
 
 ---
 
-## 8. Image generation (FLUX.2)
+## 8. Image generation & editing
 
 ### Prerequisites
 
-`mflux` must be installed. Ka1zen uses the **FLUX.2-klein-9B** model locally — no HuggingFace key required. The ~9 GB model is downloaded automatically on the first generation; everything afterwards is fully offline.
+`mflux` must be installed. Ka1zen ships with three supported families: **FLUX.2-klein-9B** (default, downloaded automatically on first generation), **Qwen-Image** (e.g. `Qwen-Image-2512-8bit`), and **Z-Image**. No HuggingFace key required for any of them.
 
-### Trigger
+Pick which family to use as the active image-gen model in **Settings → System Models → Image Generation**.
+
+### Trigger (text-to-image)
 
 Generation is automatic when tools are on. Natural phrases trigger it:
 - "Generate an image of…"
@@ -251,7 +253,25 @@ Generation is automatic when tools are on. Natural phrases trigger it:
 - "Create a photo of…"
 - "Génère une image de…"
 
-Ka1zen optimizes your prompt for FLUX before generating, then shows the image in the chat.
+Ka1zen optimizes your prompt before generating, then shows the image in the chat.
+
+### Image editing (image-to-image)
+
+Since 0.3.31, Ka1zen can **edit** an existing image instead of generating a fresh one. Three ways to enter edit mode:
+
+**A. Pin an image rendered in the chat.** Right-click any image in the conversation (FLUX-generated, web-search result, or one you uploaded) → **Use as edit source**. Or simply hover the image and click the small ✏️ pencil overlay top-right.
+
+The pinned image gets a 2 px purple border + a small **Source** badge so you always know which one will be edited. A brand-coloured banner appears above the composer with the thumbnail and a × to clear the pin.
+
+Type your edit instruction and send: *"make the dress blue"*, *"transforme en pixel art"*, *"add a pair of sunglasses"*. The next image-gen call routes to FLUX.2-Klein-Edit (or `mflux-generate-qwen` if Qwen-Image is your active model) with the pinned file as the source.
+
+**B. Attach + edit verb (one shot).** Click the paperclip, attach a photo, type an instruction with an edit verb (`edite`, `modifie`, `change`, `transforme`, `make it`, `add`, `remove`, `replace`…) and send. Ka1zen detects this combination and routes the attachment straight to the edit binary — bypasses the chat model entirely. Works in FR / EN / ES / DE / IT / PT.
+
+**C. Edit your own upload.** Same as A, but right-click the thumbnail in your message bubble.
+
+The pin clears automatically after each edit so the result becomes your next candidate — pin it (one click, the result has the same hover overlay) to iterate.
+
+**Source dimensions are preserved.** Editing a portrait keeps it portrait — `mflux-generate-flux2-edit` and `mflux-generate-qwen` default `--width`/`--height` to the source image's own dimensions when those flags are omitted. No more 1024×1024 forced crops.
 
 ### Settings (Settings → General → Image Generation)
 
@@ -308,7 +328,7 @@ and create an illustration of a couple walking on the Champs-Élysées.
 
 **When it helps:** technical diagrams, historical scenes, infographic-style illustrations, concepts where your own description would be vague.
 
-**When it doesn't:** faithful reproduction of a specific real product. FLUX generates from text; the search returns text; the gap between "white earbuds with an oval case" and "actual AirPods Pro 3 design" is real and unavoidable without image-to-image reference (not supported by `mflux` yet). Text rendered inside the image also remains unreliable — avoid asking FLUX to write long labels or paragraphs.
+**When it doesn't:** faithful reproduction of a specific real product. FLUX generates from text; the search returns text; the gap between "white earbuds with an oval case" and "actual AirPods Pro 3 design" is real. For surgical edits of a known image, use the **image editing** flow above — pin a reference and instruct the change. Text rendered inside the image also remains unreliable — avoid asking the model to write long labels or paragraphs.
 
 **Plain image requests** (no search keyword — *"draw a dragon in an enchanted forest"*) skip the search and go straight to FLUX with no added latency.
 
@@ -364,12 +384,13 @@ Hover a document → **Trash** button. The file and every embedding are permanen
 
 ### Installed tab
 
-Shows every model present in `~/.cache/huggingface/hub/`, sorted by size. Each card displays the HuggingFace ID, disk size, detected capabilities (Vision / Thinking / Audio) and server state.
+Shows every model present in `~/.cache/huggingface/hub/`, sorted by size. Each card displays the HuggingFace ID, disk size, detected capabilities (Vision / Thinking / Audio) and server state. Models whose download was interrupted (network drop, app quit mid-fetch) are filtered out automatically — Ka1zen verifies that `blobs/` is non-empty, contains no `*.incomplete` files, that a snapshot ref was resolved, and that every symlink in the snapshot tree points to an existing non-empty blob. Re-clicking **Download** on a partial model resumes from where it stopped.
 
 - **Launch** — starts `mlx_lm.server` (or `mlx_vlm.server` for VLMs) on the configured port. Startup: 30 s to 5 min depending on size.
 - **Stop** — terminates every child process immediately.
 - **Delete** — removes the model folder from the HuggingFace cache permanently.
 - **Benchmark** (stopwatch icon) — measures tokens/s and time-to-first-token.
+- **Verify integrity** (right-click → context menu) — hashes every LFS blob (multi-GB safetensors) and compares the SHA-256 to the blob filename, which **is** the expected hash at HuggingFace. Fully offline, streamed in 1 MB chunks, cancellable. Useful after a suspected disk corruption, or just before launching a model you haven't used in a while. Result appears as a green ✓ *Integrity verified* / red ⚠ *Integrity failed — \<short hash\>* badge in the card. Status is in-memory only — re-verify next session if needed.
 
 ### Browse HuggingFace tab
 
