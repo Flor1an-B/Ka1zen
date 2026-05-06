@@ -3,6 +3,34 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.33] — 2026-05-06
+
+This release rebuilds the conversation sidebar around four primitives users have wanted for a while: search, multi-select, rename, and date grouping. Past 30+ conversations the previous flat list with one-by-one delete became actively painful — a misfire on the Delete context menu was the only way to clean up old turns, and finding a specific one meant scrolling.
+
+### Added
+
+- **Multi-selection of conversations.** Native macOS shortcuts now work in the sidebar: **Cmd-click** toggles a conversation's inclusion in the selection, **Shift-click** extends the selection in a contiguous range. When two or more conversations are selected, the detail pane shifts to a *N conversations selected* panel with **Delete selection** / **Deselect all** buttons. Pressing the **Delete** key with any conversation selected opens a confirmation dialog before anything is removed — undo isn't implemented and a misfire would wipe a Q/A history irreversibly. Single-click still works as before (replaces the selection, opens the chat).
+
+- **Search bar.** A search field appears at the top of the sidebar as soon as you have at least one conversation. It filters by title, **case- and diacritic-insensitive** (`reseau` matches `Réseau`, `FIBRE` matches `fibre`). Empty filter is hidden so the sidebar stays clean for first-time users.
+
+- **Inline rename.** Right-click → **Rename** turns the conversation row into an editable `TextField` in place. Enter saves, Esc cancels. Empty / unchanged titles are dropped. The renamed conversation bumps its `updatedAt` so it jumps to the *Today* bucket — same behaviour as sending a new message in it. Previously, the only way to "rename" was to wait for the auto-title to be generated from the first user message and live with whatever it produced.
+
+- **Date grouping.** Conversations are now bucketed into five sections in the sidebar: **Today · Yesterday · Last 7 days · Last 30 days · Older**. Empty buckets don't render. Past 50+ conversations this is the difference between a wall of similar-looking rows and a scannable history.
+
+- **Per-message generation stats** *(landed in 0.3.32, surfaced here for completeness)*. Each assistant turn now carries its own stats line (tokens · t/s · peak memory · model). The previous global bar at the bottom of the chat is removed — it disappeared every time a new prompt was sent (the fallback matched the freshly-appended empty assistant placeholder, which has `generationStats=nil`) and only ever showed the most recent turn.
+
+### Changed
+
+- **Sidebar selection state moved from `SidebarDestination?` to `Set<SidebarDestination>`** under the hood, to support multi-select via `List(selection:)` natively. The detail view derives the active item from the single-selection case (`count == 1`) and falls back to the multi-selection panel when several conversations are selected. Tool rows (Documents / Models / API Relay) participate in the selection set as before but never combine with conversations — clicking one collapses the selection back to that single item.
+
+### Fixed
+
+- **Bulk-delete persistence is now atomic.** New `PersistenceController.delete(ids:)` runs a single `persist()` after removing every targeted conversation, so the sidebar list animates as one update instead of N flashing reorderings.
+
+### Internal
+
+- New `ConversationBucket` enum (`Today`/`Yesterday`/`Last 7 days`/`Last 30 days`/`Older`) with a `Calendar`-based bucketer. Pure value type, lives in the same file as `ContentView` since nothing else needs it.
+
 ## [0.3.32] — 2026-05-06
 
 This release focuses on two areas where Ka1zen visibly fell short of expectations: the **breadth and depth of web search** (DuckDuckGo's index alone was missing too many niche topics, commercial products, and French-language pages — users were getting "no info" replies on questions Google would have answered in seconds), and the **fluidity of the chat interface during long generations** (the auto-scroll fought the user, the main thread choked under repeated scroll-to-bottom calls, and clicking inside the bubble was the only known workaround to "unstick" the rendering).

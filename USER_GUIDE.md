@@ -5,7 +5,7 @@
 <h1 align="center">Ka1zen — User Guide</h1>
 
 <p align="center">
-  <strong>Local AI for Apple Silicon</strong> · Version 0.3.32 · by Florian Bertaux
+  <strong>Local AI for Apple Silicon</strong> · Version 0.3.33 · by Florian Bertaux
 </p>
 
 ---
@@ -121,11 +121,17 @@ The **text + badge** icon in the toolbar opens the system prompt editor. Use it 
 
 ### Generation statistics
 
-After each reply a bar briefly appears below the last message showing **tokens/s**, **GPU memory (GiB)** and **generated tokens**.
+Every assistant reply now carries its **own stats line** inline under the bubble: **tokens · t/s · peak memory · model name**. Each Q/A pair keeps its own numbers, so you can compare the speed and memory footprint of two responses side-by-side, or look back at a turn from yesterday and still see what model produced it.
 
-### Rename / delete
+### Manage your conversations
 
-Double-click a conversation's title in the sidebar to rename it (the title is also auto-generated after the first exchange). Right-click → **Delete** to remove it.
+The sidebar groups conversations into date buckets — **Today · Yesterday · Last 7 days · Last 30 days · Older** — and exposes the standard macOS multi-selection shortcuts:
+
+- **Search** — type into the field at the top of the sidebar to filter conversations by title. Search is case- and diacritic-insensitive (`reseau` matches `Réseau`).
+- **Rename** — right-click → **Rename**. The row turns into an inline editable field; **Enter** to save, **Esc** to cancel. The conversation jumps to the *Today* bucket since renaming bumps its updatedAt.
+- **Delete one** — right-click → **Delete**.
+- **Multi-select** — **Cmd-click** to add or remove a conversation from the selection, **Shift-click** to extend the selection in a range. The detail pane shows *N conversations selected* with bulk action buttons.
+- **Bulk delete** — with several conversations selected, press the **Delete** key (or use the *Delete selection* button in the panel). A confirmation dialog appears before anything is removed.
 
 ---
 
