@@ -3,6 +3,34 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.32] — 2026-05-06
+
+This release focuses on two areas where Ka1zen visibly fell short of expectations: the **breadth and depth of web search** (DuckDuckGo's index alone was missing too many niche topics, commercial products, and French-language pages — users were getting "no info" replies on questions Google would have answered in seconds), and the **fluidity of the chat interface during long generations** (the auto-scroll fought the user, the main thread choked under repeated scroll-to-bottom calls, and clicking inside the bubble was the only known workaround to "unstick" the rendering).
+
+### Added
+
+- **Brave Search HTML as the primary search backend.** Brave indexes ~30 billion pages on its own crawl + opt-in browser data — significantly broader coverage than DDG (which leans on Bing for the bulk of its web index) for niche topics, commercial products (telco offers, model numbers, SKUs), and francophone content. The scraper targets Brave's stable Svelte-component class prefixes (`l1` on the result anchor, `title search-snippet-title` on titles, `description … line-clamp-2` on snippets) — the rotating `svelte-XXXX` build hashes are ignored. The two existing DuckDuckGo endpoints (HTML + Lite) are kept in the chain as a safety net: if Brave rate-limits, blocks, or changes its layout, web search keeps working through DDG until the parser is updated.
+
+- **Per-message generation stats.** Every assistant turn now carries its own stats line (tokens · t/s · peak memory · model name) inline under the bubble. Each Q/A pair retains its own numbers indefinitely and switching conversations no longer wipes them. Replaces the global stats bar at the bottom of the chat, which had two problems: it disappeared every time a new prompt was sent (the fallback matched the freshly-appended empty assistant placeholder, whose `generationStats` is nil) and it carried only the most recent turn's numbers, with no way to compare two responses side-by-side.
+
+### Changed
+
+- **Smart auto-scroll during streaming.** Auto-scroll now runs only while the user is visually following the bottom — once they drag the scroll up to read older content, the scroll loop releases the main thread instead of yanking them back every 150 ms. The previous unconditional `proxy.scrollTo(.bottom)` had two compounding problems on long responses: (1) the ScrollView's content-size remeasure cost grew with the message length until the SSE consumer backpressured and tokens started arriving in visible chunks, and (2) any user attempt to scroll up was overridden 150 ms later. Both are gone. The reliable workaround of clicking inside the bubble — which engaged text selection and accidentally paused the implicit scroll animation — is no longer needed. The follow/release decision keys on `contentOffset.y` deltas, not absolute "near bottom?" distance: streaming makes `contentSize.height` grow without changing `contentOffset.y`, so content growth alone never trips the release. Throttle bumped from 150 ms → 250 ms (eye doesn't notice, main thread has ~40 % more headroom).
+
+- **Web search now fetches all returned sources, not half.** With `webSearchMaxSources=5`, the previous `pagesToFetch = sourceCount / 2` capped page-content fetches at 2 — the model only got DDG/Brave snippet sentences for the other 3 sources, often not enough to answer. Bumped to `min(urls.count, sourceCount)` so the model sees the full text of every result it's about to cite.
+
+- **Search backend chain reordered:** Brave (primary) → DDG HTML (fallback) → DDG Lite (last resort). The DDG endpoints take a `df` recency filter and `kl` region code that map cleanly to Brave's `freshness` (`pd`/`pw`/`pm`) and `country` parameters, so temporal anchoring and country bias from existing logic carry over.
+
+### Fixed
+
+- **Weather queries matched the wrong city.** "Quelles sont les prévisions météo pour Lisbonne cette semaine" routed to wttr.in as `quelles+sont+méteo+pour+lisbonne+cette+semaine`, which it interpreted as Gagnefs Kommun, Sweden (60.47°N, 14.94°E). Two compounding bugs: the strippable-words list missed "quelles" (only "quel"/"quelle" were listed), the typo "méteo" without accent (only "météo" with accent was listed), "cette", "semaine"; and the heuristic itself was a blacklist that needed to enumerate every non-location word in five languages. Replaced with a positive-extraction approach: prepositional patterns (`à <X>`, `pour <X>`, `in <X>`, `sur <X>`, `dans <X>`) parse the location explicitly, stop at temporal qualifiers ("cette", "semaine", "today", "tomorrow"…), and only fall back to the (now much more complete) blacklist when no preposition is present.
+
+- **"Fais des recherches sur internet à propos de X" triggered image generation.** `isImageGenerationRequest` matched the implicit verb "fais " and found no exclusion word in the rest of the sentence ("recherches", "internet", "informations" weren't in the textExclusions list), so it returned `true`. Then `isSearchAndGenerateRequest` chained that with the search keywords and ran both `web_search` AND `generate_image` for a query that had nothing to do with images. Exclusion list expanded with 15+ common French / English nouns that signal a search/text intent, not an image intent: `recherche`, `recherches`, `search`, `lookup`, `analyse`, `vérification`, `comparaison`, `calcul`, `question`, `phrase`, `explication`, `synthèse`, `définition`, `summary`, `étude`.
+
+- **Mistral generations had no stats.** Some mlx-lm / mlx-vlm builds (notably certain Mistral chat-template configurations) never emit a `usage` chunk in their stream. Without it, `localStats` stayed nil and `generationStats` was never set — the per-message line was empty for the entire turn. Added a fallback in `LLMClient.streamRaw`: when `usageReceived` is false at end of stream and at least one token was produced, synthesise stats from the client-side counter and the `firstTokenAt` / `lastTokenAt` timestamps. Tokens count is exact (we counted them on the way through), TPS is precise to the wall-clock; only `peakMemoryGiB` stays nil because that's a server-side measurement we can't infer.
+
+- **Streaming-level `delta.tool_calls` were executed even with tools disabled.** Mistral and other tool-trained models emit `[TOOL_CALLS]` tokens spontaneously regardless of whether the API request carries a `tools[]` array. mlx-lm/vlm post-processes those tokens into `delta.tool_calls`, which would then reach Ka1zen's executor and trigger an unwanted tool round-trip — even when the user had explicitly disabled tools via the Tools toggle. Now discarded along with their `[TOOL_CALLS]` markers in the visible content.
+
 ## [0.3.31] — 2026-05-04
 
 ### Added
