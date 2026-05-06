@@ -3,6 +3,34 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.34] — 2026-05-06
+
+This release tackles two perf bottlenecks that combined to make Qwen 3.6 + large HTML responses (~7 K tokens, ~25 K characters) feel choppy: the **per-tick layout cost during streaming** that grew with the response, and the **CoreAnimation layer size** of the post-streaming rendered code blocks. It also ships an **error console for the HTML preview window** so that "click Run → debug → fix" is a one-window loop, and fixes a heuristic false positive that routed legitimate HTML-coding requests to the image-generation pipeline.
+
+### Added
+
+- **HTML preview console.** The Run-an-HTML-block window now carries a collapsible console pane along its bottom edge. A `WKUserScript` injected at `.atDocumentStart` hooks `console.{log,info,warn,error,debug}`, `window.onerror`, and `unhandledrejection`, then forwards each event to the native side via `WKScriptMessageHandler`. The pane shows entries colour-coded by level (red errors, orange warnings, grey info / log) with `[HH:mm:ss.SSS] LEVEL source:line — message` formatting. Auto-expands on the first error so the failure doesn't slip past you. **Copy** dumps the entire log to the pasteboard as plain text, ready to paste into a chat to ask the model to fix the issue. **Clear** resets the buffer for a fresh Run.
+
+### Changed
+
+- **Chunked streaming render.** A SwiftUI `Text` re-laid out on every token tick has O(N) layout cost — past ~4 K characters each pass exceeds 30 ms and the SSE consumer back-pressures, surfacing as the visible "stalls" users reported on Qwen 3.6's HTML responses. Replaced with `StreamingMessageText`, which splits the growing content into a `@State` stable prefix (snapshotted at newline boundaries) plus a small live tail (≤ 1500 chars). Per-tick cost is now bounded by the tail length, independent of total response size. Falls through to the existing single-`Text` path for content under the threshold so short responses keep their fast path with zero overhead.
+
+- **Adaptive UI publish throttle.** The previous fixed 33 ms (≈ 30 Hz) gate on `streamingText` / `thinkingContent` ignored content length and saturated the main thread once layout cost per pass exceeded 33 ms. Now the throttle widens with the longest of the two buffers: 33 ms below 1500 chars (perceptually instant for the bleeding-edge tail), 80 ms in 1500-4000 chars, 150 ms above 4000 chars. Rate at the bleeding edge stays at 30 Hz where the eye notices; only the older content (already on screen for several seconds) gets a coarser refresh, which is invisible.
+
+- **`NSTextView` for large code blocks.** `Text` rasterises a code block into a single CoreAnimation layer the height of the entire content — for the 25 K-character HTML dumps the chat ScrollView stuttered every time that giant layer crossed the viewport edge. Code blocks larger than 1500 characters now render through an `NSViewRepresentable`-wrapped `NSTextView`, which uses `NSLayoutManager` line-by-line glyph generation: bounded layer sizes, native selection / Cmd-C, and an internal scroll bar so the bubble's outer height stays at 420 pt regardless of document size. Smaller blocks keep the SwiftUI `Text` path — no regression on light usage.
+
+### Fixed
+
+- **`isImageGenerationRequest` matched "photo" inside "photoréaliste".** A request like *"générer un code HTML photoréaliste de la Terre"* triggered both `web_search` *and* `generate_image` because the heuristic's noun check used naive substring `contains` — `"photo"` matches inside `"photorealiste"` (after diacritic folding). The check is now whole-word with Unicode-letter boundaries (`\p{L}`), so `"photo"` matches `"une photo"` / `"photo,"` but not `"photoréaliste"` / `"photographier"`. Same protection extends to `image` (no longer matches `imagerie`), `dessin` (no longer matches `dessinez`), etc.
+
+- **Stats fallback for servers that don't emit `usage`** *(landed mid-cycle in 0.3.32, generalised here)*. When the SSE stream ends without a `chunk.usage` (some Mistral builds on mlx-vlm; some older mlx-lm configurations), `LLMClient.streamRaw` now synthesises a final `.stats` event from the client-side token counter and the `firstTokenAt` / `lastTokenAt` timestamps. Tokens count is exact, TPS is wall-clock-precise; only `peakMemoryGiB` stays nil because that's a server-side measurement we can't infer.
+
+### Internal
+
+- New private `StreamingMessageText` view in `ChatView.swift` — pure value type with one `@State String` (the snapshot prefix); resets defensively if the runtime content no longer starts with the snapshot (rare, would imply an upstream content rebuild).
+- New private `NSCodeTextView` `NSViewRepresentable` paired with `CodeBlockView` — non-editable, selectable, monospace, horizontal + vertical scroll, theme-matched colours.
+- New `containsWord(_:in:)` static helper on `ChatViewModel` — Unicode-letter-boundary regex match, reusable for any future heuristic that needs whole-word matching on lowercased + diacritic-folded text.
+
 ## [0.3.33] — 2026-05-06
 
 This release rebuilds the conversation sidebar around four primitives users have wanted for a while: search, multi-select, rename, and date grouping. Past 30+ conversations the previous flat list with one-by-one delete became actively painful — a misfire on the Delete context menu was the only way to clean up old turns, and finding a specific one meant scrolling.

@@ -5,7 +5,7 @@
 <h1 align="center">Ka1zen — User Guide</h1>
 
 <p align="center">
-  <strong>Local AI for Apple Silicon</strong> · Version 0.3.33 · by Florian Bertaux
+  <strong>Local AI for Apple Silicon</strong> · Version 0.3.34 · by Florian Bertaux
 </p>
 
 ---
