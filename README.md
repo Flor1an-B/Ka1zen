@@ -59,6 +59,11 @@ Ka1zen is a native macOS app that runs open large-language models **locally** on
 | 📚 **RAG** | Index PDFs, text, code — local embeddings (Apple NLEmbedding), SQLite storage |
 | 🔎 **Token Inspector** | Per-token logprobs visualisation — spot hallucinations |
 | 🗣 **Text-to-Speech** | macOS system TTS, language auto-detect |
+| 🎤 **Voice input** | On-device dictation via `SFSpeechRecognizer` (`requiresOnDeviceRecognition = true`) — audio never leaves the Mac |
+| 🏷 **Auto-titre** | Conversation titles polished via the optimizer LLM after the first turn |
+| 🔔 **Notifications** | macOS notification when a long generation finishes while the app is in the background |
+| 🗜 **Auto-summarize old context** | Opt-in compression of older turns past a configurable token threshold — keeps long conversations alive |
+| 🩺 **Diagnostics export** | One-click JSON dump (app version, OS, hardware, settings, models, server states) for bug reports |
 | 🔌 **API Relay** | OpenAI-compatible HTTP proxy for Continue / Cursor / Zed / LM Studio |
 | 📤 **Export** | Markdown · PDF · JSON · plain text |
 | 🔒 **100 % offline** | Nothing leaves your Mac unless you explicitly configure a cloud endpoint |

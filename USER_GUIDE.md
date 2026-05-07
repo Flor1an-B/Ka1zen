@@ -109,7 +109,11 @@ The window is split into a **sidebar** on the left (navigation) and a **main pan
 
 ### Stop generation
 
-Click the **Stop** button (red square) that replaces the send arrow while the model is generating. Partial text is kept.
+Click the **Stop** button (red square) that replaces the send arrow while the model is generating. Partial text is kept. Stop also kills any in-flight image-generation subprocess (FLUX / Qwen-Image / Z-Image), so you don't have to find the PID by hand.
+
+### Long code generation & Continue
+
+For long HTML / JS / Python files, set **Max tokens** high enough that the answer fits in one or two passes — `5120+` is a safe default for typical landing pages, `8192+` for full apps. When the model hits the token cap inside an open code fence, a **Continue** button appears in the bubble's footer (and in the **•••** menu). Clicking it sends the model a strict instruction to resume from the exact last character of the code, without restarting the file. This works reliably with high `max_tokens`; with a tight budget (≤ 2048) the model occasionally still drops a section between resumes — a trade-off intrinsic to current open-weight models on multi-step code generation. The simplest workaround is to bump `max_tokens` for the conversation.
 
 ### Pick a model per conversation
 
@@ -484,9 +488,22 @@ For models downloaded under an older Ka1zen version, a **✨ Reset to publisher 
 - **Response Style** — presets (Concise, Detailed, Professional, Casual, Technical, Beginner-friendly) and a global custom system prompt.
 - **Prompt Optimizer** — the ✨ button in the chat rewrites your draft using a chosen style. A small local model is recommended here.
 - **Web Search** — Number of sources (1–20, default 5).
+- **Performance**
+  - **Prompt KV cache reuse (mlx-lm only)** — reuses prefilled KV cache between turns, dramatically lowers TTFT on long conversations. Capped at ~4 GB / 2 cached prompts. Restart the model server after toggling. Off by default.
+  - **Auto-summarize old turns past threshold** — when the conversation crosses the configured token count, the oldest turns are condensed into a synthetic summary by the optimizer LLM before being sent to the chat model. The UI keeps showing the full history. Threshold slider 4 K – 32 K (default 12 K). Off by default.
 - **Image Generation** — Steps, Width, Height, Seed.
+- **Diagnostics**
+  - **Save…** — exports `Ka1zen-diagnostics-<ISO date>.json` with app/OS/hardware info, your settings (filtered against secret-shaped key names), the installed-models registry summary, and the last 40 lines of stderr from each currently-running model server. Attach this when reporting a bug. No conversation content is included.
 - **Voice & TTS** — Speed slider (0–1), voice picker across all installed system voices ("Auto" = auto-detect language).
 - **Appearance** — Chat font size (11–24 pt).
+
+#### Auto-titre (always on)
+
+After the first complete turn of a new conversation, Ka1zen runs a small LLM call against the optimizer model to summarise the exchange into a short title (≤ 6 words, in the user's language). The fallback truncated title appears immediately so the sidebar isn't empty; the polished title replaces it ~1–3 seconds later. Bails silently if you've manually renamed the conversation in the meantime, or if the optimizer model is unset.
+
+#### System notifications (always on)
+
+When a generation takes ≥ 15 s **and** Ka1zen isn't the active app at completion, you get a macOS notification (*Ka1zen — Reply ready · <model>*). Click it to bring the window back to the front. Permissions are requested lazily on the first long-and-backgrounded turn, so you don't see a permission prompt at launch.
 
 ---
 
@@ -557,7 +574,9 @@ Click a token to see its exact logprob.
 
 ---
 
-## 14. Text-to-Speech (TTS)
+## 14. Text-to-Speech (TTS) & Voice input
+
+### Text-to-Speech
 
 Ka1zen reads model responses aloud via the macOS speech-synthesis engine.
 
@@ -568,6 +587,19 @@ Click the **speaker** icon in the chat toolbar to start reading the last assista
 - Premium (enhanced / neural) voices are preferred over compact voices.
 
 Settings → General → Voice & TTS: pick a voice, adjust speed. To install better voices, go to **System Settings → Accessibility → Spoken Content → System Voice**.
+
+### Voice input (on-device dictation)
+
+Click the **microphone** icon to the left of the Send button. Speak. The transcription streams live into the input field; click again — or press Send — to stop.
+
+- Recognition runs **fully on-device** via `SFSpeechRecognizer` with `requiresOnDeviceRecognition = true`. Audio never leaves your Mac.
+- The first time you click, macOS asks for **Microphone** and **Speech Recognition** permissions — both are mandatory.
+- Locale is auto-picked from the language of the most recent assistant reply (French / Spanish / German / Italian / Portuguese / Japanese / Chinese / English supported), falling back to your system preferred language.
+- If on-device recognition isn't available for your language, Ka1zen surfaces a clear error rather than silently falling back to a cloud recognizer.
+- The transcript is **appended** to whatever you'd already typed — you can dictate to fill in a half-typed message.
+- Sending automatically stops the recording so the mic doesn't keep listening to keyboard noise.
+
+To download a missing language pack: **System Settings → General → Language & Region → Live Speech / Dictation**, or just trigger dictation once and macOS will offer the download.
 
 ---
 
