@@ -255,6 +255,63 @@ Click the **brain / lightbulb** icon in the toolbar to toggle thinking. The reas
 
 Pick which family to use as the active image-gen model in **Settings → System Models → Image Generation**.
 
+### Bundles: Generation + Edit, configured together
+
+Since v0.3.36 the image-generation slot in Settings is framed as a **bundle** — a coherent pair of (T2I model, Edit model). Two paths:
+
+| Bundle | T2I model | Edit model | What to install |
+|---|---|---|---|
+| **FLUX.2** | `mlx-community/FLUX.2-klein-9B` | (auto — same install) | One model. mflux bundles the FLUX edit binary; pinning an image automatically routes to `mflux-generate-flux2-edit`. |
+| **Qwen Image** | `mlx-community/Qwen-Image-mflux-4bit` (or any Qwen-Image variant) | `fcreait/Qwen-Image-Edit-mflux` | **Two** separate downloads. Without the second, Ka1zen falls back to img2img on the T2I weights (works but lower fidelity than the dedicated Qwen-Image-Edit pipeline). |
+| **Z-Image** | `mlx-community/Z-Image-…` | — | Generation only. Z-Image has no published edit variant — pinned-image edits fall back to img2img on the T2I model. |
+
+Ka1zen displays the current bundle status (✅ complete / ⚠️ incomplete / ℹ generation-only) at the top of **Settings → System Models**, with a one-click hint pointing at the exact repo to install when the edit half is missing.
+
+**For Qwen-Image-Edit specifically:** the canonical mflux build is published under `fcreait/Qwen-Image-Edit-mflux` (not `mlx-community/`). Since v0.3.36 the `fcreait` org is in the default browse sources, so it appears in **Model Manager → Browse** alongside mlx-community models.
+
+**Important:** that single repo ships **six different quantizations** inside sibling subfolders (q3, q4, q5, q6, q8, full bf16), totalling ~141 GB if you'd download them all. Ka1zen detects this layout and replaces the usual **Download** button with **Pick variant…** — clicking it pops a picker listing every variant with its size and a `RECOMMENDED` highlight on q4. Pick one, and Ka1zen downloads **only that ~25 GB subfolder** via the `huggingface_hub` `allow_patterns` filter. Variants that wouldn't fit on your Mac (>85% of RAM) are shown but disabled with a `WON'T FIT` badge so you can't accidentally pick a too-large quant.
+
+After install, each variant appears as a separate entry in `System Models → Image Editing` (the picker shows `Qwen-Image-Edit-mflux (q4)` etc., one row per installed variant), so you can have multiple quants on disk and switch between them for experimentation. Ka1zen auto-assigns the **first** installed Qwen-Image-Edit variant to the Image Editing slot — you only need to touch the picker if you later download a second variant and want to switch.
+
+#### Step-by-step: build the Qwen Image bundle from scratch
+
+If you're starting fresh and want a fully working Qwen Image (generation + edit) setup on a Mac with 32 GB+ RAM, this is the precise path:
+
+1. **Open Model Manager** — toolbar icon or `⌘⇧M`.
+2. **Browse tab** → search field → type `qwen image`.
+3. **Install the T2I model** : in the search results, find `Qwen-Image-mflux-4bit` (or `Qwen-Image-2512-8bit`, your preference) under `mlx-community`, click **Download**. ~24-34 GB depending on quant.
+4. **Install the Edit model** : in the same search results, find `Qwen-Image-Edit-mflux` under `fcreait`. The button reads **Pick variant…** (not Download) — click it.
+5. **Variant picker sheet** appears: choose **`4-bit · recommended (~25 GB)`** unless you have a specific reason to pick another quant. Click **Install selected variant**.
+6. Watch the progress bar in the card. Once it reaches 100%, the card flips to **Installed**.
+7. **Open Settings → System Models** (toolbar gear → `Models` tab → `System Models`).
+8. **Bundle status card** at the top should auto-fill to green : *Bundle: Qwen Image (Generation + Edit)* — meaning Ka1zen has auto-assigned both slots correctly.
+9. If the status is still orange (*Editing model missing*), scroll down to **Image Editing (optional)** and pick `Qwen-Image-Edit-mflux (q4)` (or whichever variant you installed) manually.
+10. **Test from a new conversation** : upload a photo via the paperclip, type an edit verb (`edite`, `modifie`, `change`, `supprime`…), Send. The badge under the result should read `✏️ Qwen-Image-Edit-mflux (q4) · 12.3 s · from source`.
+
+If anything looks wrong at any step, `Settings → General → Diagnostics → Save…` exports the JSON dump you can attach to a bug report.
+
+#### How the wire path resolves
+
+When you send an edit prompt with a Qwen-Image-Edit model assigned, Ka1zen runs:
+
+```
+mflux-generate-qwen-edit \
+  --model  /Users/<you>/.cache/huggingface/hub/models--fcreait--Qwen-Image-Edit-mflux/snapshots/<hash>/q4 \
+  --base-model qwen \
+  --image-paths /var/folders/.../source.png \
+  --prompt "edite l'image, supprime le mac" \
+  --steps 20 \
+  --seed <…> \
+  --output /var/folders/.../ka1zen_images/qwen_<id>.png
+```
+
+Two things to notice:
+
+- `--model` is a **local filesystem path**, not a HuggingFace ID. mflux's `--model` flag accepts HF references like `org/repo`, but **not** the composite `org/repo/subfolder` shape — so Ka1zen resolves the composite against the HF cache itself and hands over the absolute path.
+- `--image-paths` is **plural** (not `--image-path` singular). The `mflux-generate-qwen-edit` binary supports multi-image conditioning for composition prompts. Ka1zen currently exposes only a single pinned source per edit in the UI; the multi-image plumbing is in place for a future revision.
+
+When the Edit model slot is empty, the same prompt routes through `mflux-generate-qwen --image-path <source>` instead — img2img on the T2I weights, lower fidelity but still architecturally coherent.
+
 ### Trigger (text-to-image)
 
 Generation is automatic when tools are on. Natural phrases trigger it:
@@ -282,6 +339,10 @@ Type your edit instruction and send: *"make the dress blue"*, *"transforme en pi
 The pin clears automatically after each edit so the result becomes your next candidate — pin it (one click, the result has the same hover overlay) to iterate.
 
 **Source dimensions are preserved.** Editing a portrait keeps it portrait — `mflux-generate-flux2-edit` and `mflux-generate-qwen` default `--width`/`--height` to the source image's own dimensions when those flags are omitted. No more 1024×1024 forced crops.
+
+**Which model produced this image?** Since v0.3.36, every inline image in chat carries a small caption underneath: an icon (🎨 generation / ✏️ edit), the model name, and the wall-clock duration ("Qwen-Image · 8.7 s" or "Qwen-Image-Edit · 12.4 s · from source"). Hover the line for the full HuggingFace ID. Old messages without the metadata simply omit the caption — strict backward compatibility.
+
+**Multi-image conditioning under the hood.** `mflux-generate-qwen-edit` accepts a plural `--image-paths` list, so the runner is wired to support multi-source edits (composition, multi-reference). The chat UI currently exposes only a single pinned source per edit — extending the pin panel to a list is planned for a future release. Power users invoking the tool directly via Tools-mode can still pass multiple paths.
 
 ### Settings (Settings → General → Image Generation)
 

@@ -55,7 +55,9 @@ Ka1zen is a native macOS app that runs open large-language models **locally** on
 | 🌐 **Web search** | DuckDuckGo + page fetch, with clickable `[1]`-style citations and date-aware queries |
 | 📸 **Inline web images** | Ask *"affiche 5 photos du Japon"* / *"show me 3 pictures of Mario"* — DuckDuckGo Images is queried, results downloaded, displayed inline (up to 10 per call) |
 | 🎨 **Image generation** | FLUX.2-klein-9B, Qwen-Image, Z-Image locally via `mflux` — natural-language trigger, optional web-search grounding |
-| ✏️ **Image editing** | Pin any image (chat output, web result, upload) → edit it via FLUX.2-Klein-Edit or Qwen-Image. Source dimensions preserved, attach + edit-verb short-circuit |
+| ✏️ **Image editing** | Pin any image → edit via FLUX.2-Klein-Edit or **Qwen-Image-Edit-mflux** (dedicated checkpoint, separate download). Attach + edit-verb short-circuit, source dimensions preserved |
+| 🧩 **Image bundles** | T2I + Edit configured together in `System Models`. Multi-variant repos (e.g. `fcreait/Qwen-Image-Edit-mflux` with q3-q8 sub-quants) install one variant at a time via a picker sheet — ~25 GB instead of the 141 GB full repo |
+| 🏷 **Provenance badge** | Every generated/edited image carries a badge underneath: model · duration · "from source" — confirms at a glance which checkpoint produced the result |
 | 📚 **RAG** | Index PDFs, text, code — local embeddings (Apple NLEmbedding), SQLite storage |
 | 🔎 **Token Inspector** | Per-token logprobs visualisation — spot hallucinations |
 | 🗣 **Text-to-Speech** | macOS system TTS, language auto-detect |
