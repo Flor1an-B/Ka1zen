@@ -182,6 +182,17 @@ When the model is ready, you land in the chat. Type a message, press **Enter**, 
 
 ---
 
+## Tested on
+
+Ka1zen is developed and validated daily on:
+
+- **MacBook Pro** (Mac17,6) — Apple **M5 Max** · 18 CPU cores (6 efficiency + 12 performance) · 40 GPU cores · **128 GB** unified memory
+- **macOS 26.4.1** (Tahoe) · Python 3.14 from python.org
+
+Any Apple Silicon Mac (M1 or newer) with macOS 15+ and 16 GB RAM is supported.
+
+---
+
 ## Documentation
 
 - 📘 [**User Guide**](USER_GUIDE.md) — full walkthrough of every feature: chat, vision, RAG, image generation, API relay, Token Inspector, advanced settings.
