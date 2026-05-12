@@ -344,6 +344,26 @@ The pin clears automatically after each edit so the result becomes your next can
 
 **Multi-image conditioning under the hood.** `mflux-generate-qwen-edit` accepts a plural `--image-paths` list, so the runner is wired to support multi-source edits (composition, multi-reference). The chat UI currently exposes only a single pinned source per edit — extending the pin panel to a list is planned for a future release. Power users invoking the tool directly via Tools-mode can still pass multiple paths.
 
+**Click any image in the chat to open it full-size.** Since v0.3.37, clicking on a generated or edited image (anywhere in any conversation, current or scrolled-back) opens a detached preview window with the image at native resolution. The window has its own toolbar (zoom, Copy, Save…, Reveal in Finder, Close `⌘W`), supports pinch-zoom + drag-pan, and accepts double-click to toggle between 1× and 2×. Multiple previews can be open in parallel — handy when comparing two variants side-by-side without re-saving each. Right-click on the image also exposes **Open Preview…** as an alternative discovery path. The window title shows the model + duration so you keep the provenance context.
+
+#### Edit-prompt optimization (default ON, v0.3.37+)
+
+Before each pinned-image or attach-edit run, Ka1zen routes your instruction through the optimizer model and rewrites it into the form diffusion edit pipelines actually follow well:
+
+| Your input | What's sent to mflux |
+|---|---|
+| "change la couleur de la robe en vert mais garde la femme identique" | "Change ONLY the dress color to green. Keep the woman's face, body, pose, hairstyle, skin tone, and background exactly identical. Same lighting and camera angle." |
+| "supprime le mac sur la table" | "Remove the Mac computer from the desk. Reconstruct the desk surface behind it naturally. Keep all other objects, people, lighting, and background unchanged." |
+| "make her hair blonde" | "Change ONLY the woman's hair color to natural blonde. Keep her face, expression, pose, body proportions, clothing, and background identical." |
+
+Three transforms run together: (1) **English translation** because Qwen-Image-Edit / FLUX.2-Klein-Edit were trained mostly on English instruction pairs and follow them noticeably more reliably than French; (2) **negative → positive constraints** because diffusion models follow "produce X" much more strongly than "don't produce Y"; (3) **explicit identity-preservation cues** — face, body, pose, hair, clothing, background, lighting, camera angle.
+
+The rewritten instruction is the one shown as **`Edit instruction: "…"`** under the result image, so you can audit what the model actually saw. Adds ~1-3 s per edit (a single call to the optimizer model, usually already in memory). Toggle in **Settings → General → Image Generation → Optimize edit prompts** if you prefer your literal prompt sent verbatim.
+
+While the rewrite is in flight you'll see:
+- A spinner with "Optimizing prompt…" above the input bar (same banner as the chat ✨ optimizer)
+- The assistant bubble shows "✨ **Optimizing edit prompt…**" then transitions to "🎨 **Editing image…** Steps: X/Y"
+
 ### Settings (Settings → General → Image Generation)
 
 | Parameter | Default | Description |
@@ -462,6 +482,12 @@ Shows every model present in `~/.cache/huggingface/hub/`, sorted by size. Each c
 - **Delete** — removes the model folder from the HuggingFace cache permanently.
 - **Benchmark** (stopwatch icon) — measures tokens/s and time-to-first-token.
 - **Verify integrity** (right-click → context menu) — hashes every LFS blob (multi-GB safetensors) and compares the SHA-256 to the blob filename, which **is** the expected hash at HuggingFace. Fully offline, streamed in 1 MB chunks, cancellable. Useful after a suspected disk corruption, or just before launching a model you haven't used in a while. Result appears as a green ✓ *Integrity verified* / red ⚠ *Integrity failed — \<short hash\>* badge in the card. Status is in-memory only — re-verify next session if needed.
+
+#### Best fit badge
+
+When several quantizations of the same model show up in a search (e.g. `Qwen3.6-35B-A3B-4bit`, `Qwen3.6-35B-A3B-8bit`, `Qwen3.6-35B-A3B-mxfp8`), the largest one that **comfortably fits on your Mac's RAM** is marked with a small green **`BEST FIT`** pill next to the standard fit chip. The rule is simple: among the family group, take the variant with the largest size whose `fit == .fits` (`.tight` only if no `.fits` exists at all). Higher quants generally give better quality, so the largest that fits is usually what you want. Hover the badge for a one-line explanation.
+
+The grouping happens at the modelID level — Ka1zen strips trailing quant suffixes (`-Nbit`, `-mxfpN`, `-bf16`, `-DWQ`, `-DQ`, `-OptiQ`, `-mlx`, chained) and groups results by what's left. Single-variant families (no siblings to compare against) don't get a badge — the existing fit chip already conveys the only relevant info.
 
 ### Browse HuggingFace tab
 

@@ -3,6 +3,36 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.37] — 2026-05-12
+
+Three usability features ship together, all aimed at the discovery and quality of the image / model experience. **`BEST FIT` badge** ranks the right quantization for your Mac out of a model family's many variants. **Image preview window** opens a full-size detached viewer on a tap, with zoom and quick actions. **Edit-prompt optimization** rewrites your image edit instruction to the form that diffusion edit models actually follow — translated to English, negatives flipped to positive constraints, identity-preservation cues injected — so face / pose / composition drift on Qwen-Image-Edit and FLUX.2-Klein-Edit drop noticeably.
+
+### Added
+
+- **`BEST FIT` badge in `Model Manager → Browse`.** Search results are silently grouped by family base name (every variant that shares a name modulo its quantization suffix — e.g. `Kimi-K2-Instruct-3bit / -4bit / -6bit / -8bit` collapse into one family), then each group's largest variant whose estimated size still fits the host RAM gets a small green pill next to its existing `Fits well` / `Tight` chip. Logic prefers `fit == .fits` (comfortable headroom) over `.tight` (would fit but no margin); ties broken by largest size since higher quants generally win on quality. Singleton families don't get a badge — the regular fit chip is enough and a "best of one" highlight would be noise. The badge tooltip explains the heuristic so power users can verify the choice.
+
+- **Image preview window.** A click on any generated/edited image in the chat opens a detached, non-modal native macOS window with the image at its natural resolution (capped to 80% of the visible screen at first open). Toolbar carries zoom out/in/fit, a percentage readout, **Copy**, **Save…**, **Reveal in Finder**, and **Close** (`⌘W`). Inside the viewer: pinch-to-zoom (`MagnifyGesture`), drag to pan when zoomed in, double-click to toggle between 100% and 200%. Multiple windows can be open in parallel — useful when comparing variations side-by-side. The window title surfaces the model + duration the bubble badge already shows. Right-click on any image still offers "Open Preview…" as an alternative discovery path.
+
+- **Edit-prompt optimization (default ON).** Before each pinned-image or attach-edit run, Ka1zen routes the user's instruction through the optimizer model with a system prompt purpose-built for diffusion edit pipelines. Three transforms run together: (1) **translate to English** because Qwen-Image-Edit and FLUX.2-Klein-Edit were trained mostly on English instruction pairs and follow them noticeably more reliably; (2) **flip negatives to positive constraints** — `"don't modify the woman"` becomes `"keep the woman's face, body, pose, hairstyle, and proportions exactly identical"`, since diffusion models follow "produce X" much more strongly than "don't produce Y"; (3) **add identity-preservation cues** — face, body, pose, hair, clothing, background, lighting, camera angle. The rewritten instruction is what reaches mflux and what appears under the result image as `Edit instruction: "…"` so the user can audit it. Adds ~1-3 s per edit (a single call to the optimizer model, usually already warm). Toggle in `Settings → General → Image Generation → Optimize edit prompts`.
+
+### Changed
+
+- **Visible progress for prompt-optimization phases.** Transient assistant-bubble statuses now carry an icon + bold formatting so they survive the eye even when the optimizer model is fast (Gemma-4-E4B finishes in ~2.5 s on M-series). `Optimizing edit prompt…` becomes `✨ **Optimizing edit prompt…**`, `Editing image… Steps: X/Y` becomes `🎨 **Editing image…** Steps: X/Y`, same treatment for the generation paths. The input-bar `isOptimizingPrompt` banner (ProgressView + spinner) also raises during image-edit optim, giving the user a second visual cue independent of the chat scroll position.
+
+### Internal
+
+- New `ModelManagerViewModel.familyBaseName(_:)` — strips trailing quantization suffix tokens (`-4bit` / `-mxfp8` / `-bf16` / `-fp16` / `-fp8` / `-DWQ` / `-DQ` / `-OptiQ` / `-mlx`) from a HF model id to produce the grouping key. Handles chained suffixes like `-mlx-3bit` and `-2bit-DQ` by repeating the match block in the regex. Case-insensitive, idempotent on ids without a recognised tail.
+
+- New `ModelManagerViewModel.bestFitModelIDs` — `Set<String>` of modelIDs flagged as best-fit for the current `searchResults`. Computes once per render by zipping each result with its `ModelSizeResolver` size (falls back to `ModelCompatibility.size` name-parse when the API resolver hasn't fired yet) and the host's `HardwareInfo.current`. Browse passes the set into `BrowseModelCard` as an `isBestFit: Bool` flag — the card already had `sizeGB` + `fit` plumbing in place from the existing fit chip, so the new pill is just one more conditional view in the same row.
+
+- `BrowseModelCard` gains an `isBestFit` parameter (defaults to `false` for backward compat) and a `bestFitBadge` view alongside the existing `fitChip`. Tooltip on hover. No layout reflow — the badge slots into the existing meta line.
+
+- New `Features/ImagePreview/ImagePreviewWindow.swift` — `NSWindowController` subclass mirroring `HTMLPreviewWindowController` (static `liveControllers` retention, single `present(path:modelName:duration:)` entry point, releases via `NSWindowDelegate.windowWillClose`). Content is a pure SwiftUI `ImagePreviewContent` hosted via `NSHostingView`: GeometryReader-anchored `Image(nsImage:).resizable().scaledToFit()` with `MagnifyGesture` + `DragGesture` for zoom/pan, double-tap to toggle 1×/2×, toolbar with Copy / Save…/ Reveal / zoom controls / Close (⌘W). Reads the image at click time so a progressive write (mflux's per-step PNG) lands cleanly if the user races to click.
+
+- New `ChatViewModel.optimizeImageEditPrompt(_:config:)` and `ChatViewModel.imageEditOptimizationEnabled` static getter. The optimizer prompt is intentionally short (~250 words system, single-line user input, output capped to ~60 words) — long rewrites dilute the change signal across too many tokens and the edit model splits attention. Examples baked into the system prompt anchor the model on the right output shape.
+
+- `InlineGeneratedImage` tap gesture wired to `ImagePreviewWindowController.present(...)` with the marker-extracted model + duration so the preview window's title carries provenance.
+
 ## [0.3.36] — 2026-05-11
 
 This release brings **first-class Qwen-Image editing** to Ka1zen via the dedicated `mflux-generate-qwen-edit` binary, alongside a per-image **provenance badge** that tells the user exactly which model produced the picture in their chat. The image-generation slot in Settings is now framed as a **"Bundle"** — Generation + Edit, configured either implicitly (FLUX) or explicitly (Qwen-Image + Qwen-Image-Edit).
