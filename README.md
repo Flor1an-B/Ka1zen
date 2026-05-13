@@ -247,9 +247,13 @@ Ka1zen is a personal project built in my own time. If you find it useful, you ca
   <a href="https://paypal.me/lefbe">
     <img src="https://img.shields.io/badge/PayPal-Support%20this%20project-00457C?style=for-the-badge&logo=paypal&logoColor=white" alt="Support via PayPal">
   </a>
+  &nbsp;
+  <a href="https://x.com/_LEFBE">
+    <img src="https://img.shields.io/badge/X-Follow%20%40__LEFBE-000000?style=for-the-badge&logo=x&logoColor=white" alt="Follow @_LEFBE on X">
+  </a>
 </p>
 
-Issues, feedback and feature requests are also welcome on the [**Issues page**](../../issues).
+Issues, feedback and feature requests are also welcome on the [**Issues page**](../../issues). Release news & updates land first on [**X (@_LEFBE)**](https://x.com/_LEFBE).
 
 ---
 
@@ -266,4 +270,4 @@ See [LICENSE](LICENSE) for the full text.
 
 ## Author
 
-Developed by **Florian Bertaux** · © 2026 · See also [GhostWatch](https://github.com/Flor1an-B/GhostWatch).
+Developed by **Florian Bertaux** ([@_LEFBE](https://x.com/_LEFBE)) · © 2026 · See also [GhostWatch](https://github.com/Flor1an-B/GhostWatch).
