@@ -3,6 +3,39 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.40] — 2026-05-13
+
+Brings **Server Console** — a per-model live view of the underlying `mlx_lm.server` / `mlx_vlm.server` subprocess. Each running model now exposes a terminal icon in `Model Manager → Installed` that opens a sheet streaming stdout + stderr in real time, headed by the full launch metadata (modelID, PID, port, executable, arguments, environment variables) and ending with Copy / Save buttons for bug reports. Ships together with a **fatal-error scanner** that watches the live stderr for the narrow set of patterns that mean "the process is up but its inference path is dead" (the canonical `mlx_lm.server` failure mode for unsupported architectures like `bailing_hybrid` / `deepseek_v4`): the moment a fatal pattern fires, the server is automatically killed, the model's row flips to a new **STUCK** state badge, the Console sheet opens itself, and the user lands directly on the actual Python error instead of an indefinite "loaded but silent" state.
+
+### Added
+
+- **Server Console sheet** (`Features/ModelManager/ServerConsoleView.swift`). Per-model, per-launch live mirror of the server subprocess:
+  - **Header** — modelID, status badge (LIVE / STUCK / CRASHED / EXITED), PID, port, started timestamp, executable path, full argument list, environment variables.
+  - **Output stream** — stdout (primary text), stderr (orange), and `[sys]` system messages (accent colour) interleaved by timestamp. Soft-capped at 256 KB; older lines auto-trimmed with a `[N older line(s) trimmed]` marker so chatty `tqdm` progress bars can't run away with memory.
+  - **Footer actions** — `Auto-scroll` toggle (defaults on, follows tail), `Copy` button (header + log to clipboard as plain text), `Save…` button (writes `ka1zen-server-<modelID>-<timestamp>.txt`), `Close`.
+- **Terminal icon in `InstalledModelCard`** — appears alongside Launch / Stop whenever a model has a console available for this session (live, crashed, exited, or stuck). One-click into the sheet.
+- **Auto-open on crash and stuck** — when `ModelLauncher` detects a real process termination *or* a fatal stderr signature, it broadcasts a notification that `ModelManagerView` consumes to auto-present the Server Console sheet for the affected model. The user no longer has to wonder "loaded but silent — what's wrong?": the actual exception lands in front of them.
+- **Fatal-error scanner** (`FatalErrorScanner.detect(in:)` in `Core/LLM/ServerConsole.swift`). Whitelist-only inline matcher that flags the three signatures empirically observed to mean "service is dead even though process is alive":
+  - `Exception in thread Thread-1 (_generate)` → *"Generator thread crashed — server is up but cannot answer"*
+  - `ValueError: Model type X not supported` → *"Model type X not supported"* (regex captures the architecture name)
+  - `ModuleNotFoundError: No module named 'mlx_lm.models.X'` → *"Model type X not supported by mlx-lm"*
+  Every other stderr content stays informational (warnings, retried tracebacks, …) and does NOT trip the badge — false positives would erode trust in the signal faster than they'd add value.
+- **`ServerState.stuck(reason: String)`** — new enum case distinguishing "process up but inference dead" from `.failed` (process actually exited). Treated like `.failed` for UI purposes (badge red, console auto-opens), but ModelLauncher knows the process still needs killing.
+
+### Changed
+
+- **`StderrCapture` → `ServerConsole`** transition for the launch path. The 64 KB rolling stderr buffer is preserved (still used by `extractError()` for `lastStderr(for:)`), but the launcher now ALSO routes every stdout / stderr chunk into the observable `ServerConsole`. **Stdout was historically ignored** — the existing `process.standardOutput = Pipe()` had no readability handler. mlx-lm's port-bind notes and tqdm progress bars only show on stdout, so capturing it is the difference between "user sees what's happening" and "silent stuck server".
+- **Inline stderr scan during launch** (`ModelLauncher.swift`, stderr readabilityHandler). Single-shot per launch via an `AtomicBool` flag — once a fatal pattern fires, subsequent chunks of the same traceback are silenced. Detection triggers `markStuck(modelID:reason:)` which transitions state, broadcasts `modelLauncherDidGetStuck`, and schedules a `stop(modelID:)` call ~100 ms out so the now-useless Python process doesn't keep burning RAM / holding the port.
+- **State badge and action buttons treat `.stuck` like `.failed`** in `ModelManagerView`, `ModelPickerView`, and `DiagnosticsService`. Red badge, terminal icon visible, primary action returns to "Launch" once the auto-kill completes.
+
+### Internal
+
+- New `Core/LLM/ServerConsole.swift` — `@MainActor` observable model + `Notification.Name.modelLauncherDidCrash` + `Notification.Name.modelLauncherDidGetStuck` declarations + `FatalErrorScanner` whitelist matcher. `nonisolated init` so `ModelLauncher.launch(...)` can construct it from its non-MainActor context; all subsequent mutation hops to MainActor via `Task { @MainActor in ... }`.
+- New `Features/ModelManager/ServerConsoleView.swift` — pure SwiftUI sheet; auto-scroll managed by a `ScrollViewReader` keyed off `console.lines.count`; per-source colour mapping (stdout primary, stderr orange, system accent); `NSPasteboard.general` copy + `NSSavePanel` for save.
+- `ModelLauncher.swift` — internal `AtomicBool` helper (NSLock-protected boolean) used by the readability handler's stuck-once flag; new `consoles: [String: ServerConsole]` dictionary indexed by modelID; new public accessor `console(for: String) -> ServerConsole?`; `terminationHandler` now drains both pipes (stdout was previously not drained), marks the console terminated, and posts `modelLauncherDidCrash` on non-zero non-signal exit.
+- `ModelManagerView` listens on both `modelLauncherDidCrash` and `modelLauncherDidGetStuck` and binds the sheet to a `@State var consoleForModel: ServerConsole?` (Identifiable via modelID, so SwiftUI cleanly re-presents when a different model crashes while one is already open).
+- xcodegen regenerated to pick up the new sources (Ka1zen.xcodeproj is gitignored, project.yml is the source of truth).
+
 ## [0.3.39] — 2026-05-13
 
 Reasoning models that ship a sidecar `chat_template.jinja` (NVIDIA Nemotron-3-Nano, Qwen3-Next…) were systematically miscategorised as non-thinking by `Auto-detect`, so Ka1zen sent `enable_thinking=false` to `mlx_lm.server`. The template then injected an empty `<think></think>` block before generation, putting the model out-of-distribution and triggering hard **mode-collapse loops** on long-form prompts ("par parution par parution…", "35 minutes avant la publication…", `[22] [23] [24]…[167]` numerical drift). Three coordinated fixes ship together: stronger thinking detection (template-based + sidecar-parser-based + extended name patterns), an auto-applied **reasoning stability bundle** (`repetition_penalty=1.05`, `min_p=0.02`) that kills the residual repetition pathways once the thinking flag is right, and a one-shot retro-migration so users who already installed reasoning models before this build get the same protection without touching `Settings → Models`. **Zero per-model hardcoding** — every signal is generic and applies to any future thinking model published with the same conventions.
