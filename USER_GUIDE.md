@@ -5,7 +5,7 @@
 <h1 align="center">Ka1zen — User Guide</h1>
 
 <p align="center">
-  <strong>Local AI for Apple Silicon</strong> · Version 0.3.34 · by Florian Bertaux
+  <strong>Local AI for Apple Silicon</strong> · Version 0.3.38 · by Florian Bertaux
 </p>
 
 ---
@@ -569,6 +569,37 @@ Since 0.3.13, every newly downloaded model is created with the generation parame
 3. **Neutral 0.7** if the family is unknown.
 
 For models downloaded under an older Ka1zen version, a **✨ Reset to publisher defaults** button at the top of the *Generation* section in Edit Model applies the same cascade in one click. A small caption below the button shows what was applied and from which source.
+
+#### Bring Your Own Backend (BYOB) — vLLM, Ollama, llama.cpp & co.
+
+Ka1zen's chat layer talks OpenAI's `/v1/chat/completions`, so **any OpenAI-compatible HTTP server** can be plugged in as a regular model. Useful when:
+
+- A brand-new architecture (DeepSeek V4, MTP heads, exotic MoE, …) isn't supported by `mlx-lm` yet but is already running on **vLLM**, **Ollama**, **llama.cpp** (`llama-server`), **LM Studio** or **MLC LLM**.
+- You want to drive a CUDA / ROCm workstation from your Mac over the LAN.
+- A teammate hosts the model on a shared Mac Studio and you only need the client side.
+
+**Step-by-step:**
+
+1. **Start the external server.** A few common shapes:
+   - **Ollama** — `ollama serve` (defaults to `http://127.0.0.1:11434/v1`; OpenAI-compatible since 0.1.x).
+   - **llama.cpp** — `llama-server -m model.gguf --host 127.0.0.1 --port 8088` (exposes `/v1/...`).
+   - **vLLM** — `vllm serve <model> --host 127.0.0.1 --port 8000`.
+   - **LM Studio** — *Developer → Local Server → Start* (defaults to `http://127.0.0.1:1234/v1`).
+2. **Note the exact model ID** the server exposes. Ollama uses tags (`llama3.3:70b`); vLLM and llama-server echo back whatever you passed to `--model`; LM Studio shows it in the *Local Server* sidebar.
+3. **In Ka1zen: Settings → Models → Add Model.**
+   - **Base URL**: paste the full URL ending in `/v1`.
+   - **Model ID**: paste the exact model name the backend exposes.
+   - **API Key**: leave empty for purely local servers; set the bearer token for hosted backends that require one.
+   - **Capabilities**: tick *Vision / Tools / Thinking / Audio* by hand — Ka1zen's **Auto-detect** only inspects the local HuggingFace cache, which is empty for BYOB models.
+
+The new entry behaves like any local mlx-lm endpoint in the chat picker: streaming responses, generation parameters, web search, RAG and the API Relay (section 12) all work transparently.
+
+**Caveats**
+
+- Ka1zen does **not** manage the backend's lifecycle (download, launch, shutdown) — start and stop it yourself.
+- Generation parameter coverage varies per backend: most accept temperature / top-p / top-k, but `min_p`, `repetition_penalty`, `frequency_penalty` and `presence_penalty` are silently ignored by some servers.
+- Tool calling needs the backend to emit OpenAI-style `tool_calls` chunks. vLLM and `llama-server` do; Ollama's coverage is partial — check your version's release notes before turning Tools on.
+- Token counting and TPS come from the backend's `usage` block when present, with a client-side fallback otherwise; numbers may differ slightly from a native mlx-lm run.
 
 ### General tab
 

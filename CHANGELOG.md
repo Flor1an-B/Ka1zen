@@ -3,6 +3,29 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.38] — 2026-05-13
+
+Two startup hygiene migrations land together to fix the long-standing **phantom "Not installed" badge** on `Settings → Models`. Stale **ghost cache folders** (HuggingFace download stubs that died after the metadata fetch but before any blob landed — canonical signature is `refs/` present, `blobs/` empty) are now scanned and removed at app launch alongside their matching `ModelConfig`. A second migration catches legacy **bare configs of multi-variant repos** (e.g. `fcreait/Qwen-Image-Edit-mflux`) when the modern flow has already registered a composite config (`…/q8`) — the bare entry was a pure duplicate that produced a permanent orange badge. Both passes are idempotent and become no-ops after the first launch. The **User Guide** now documents the **BYOB** (Bring Your Own Backend) pattern: plug any OpenAI-compatible server (vLLM, Ollama, `llama-server`, LM Studio, MLC LLM, …) into Ka1zen's chat picker for bleeding-edge architectures that `mlx-lm` doesn't support yet (DeepSeek V4, MTP, exotic MoE).
+
+### Fixed
+
+- **Permanent "Not installed" badge on Settings → Models.** Two distinct migrations now run during `PersistenceController.load()`:
+  - **Ghost folder cleanup.** Enumerates `~/.cache/huggingface/hub/models--*` entries with no `blobs/` payload (the canonical "ghost folder" signature). A folder with `blobs/` present — even with `.incomplete` files inside — is intentionally left alone so an in-flight download from another tool can resume without Ka1zen wiping it mid-flight. For each ghost the cache folder is removed and the matching `ModelConfig` is dropped, its `SecretStore` entry purged, and any `ModelRole` that pointed at the now-defunct ID is reset to its default. Runs **before** `syncWithInstalledModels` so sync never re-imports a stale shell.
+  - **Multi-variant orphan migration.** Detects bare-form `ModelConfig` entries whose `modelID` is the bare repo of a known multi-variant family (`MultiVariantRepoRegistry.variants(for:) != nil`) AND at least one variant of that repo is installed. Two branches: if a composite config (`fcreait/Qwen-Image-Edit-mflux/q8`) already exists → drop the bare entry as a duplicate, reassigning any dangling system role to the composite first; if no composite exists yet → rewrite the bare's `modelID` to the first installed variant, preserving user-customised generation params (temperature, context length, capability flags). Runs **after** `syncWithInstalledModels` so every installed variant is guaranteed to already have its own composite config in place before we deduplicate.
+
+### Added
+
+- **BYOB (Bring Your Own Backend) section in `USER_GUIDE.md`.** New subsection under `11. Settings → Models tab — endpoints` documenting how to plug vLLM / Ollama / `llama-server` / LM Studio / MLC LLM into Ka1zen. Useful when a bleeding-edge architecture lands on a third-party server before mlx-lm upstreams it. Includes per-backend launch commands, the three "Add Model" fields, and a caveats block on per-backend capability quirks (tool calling support, generation parameter coverage, lifecycle ownership, token counting).
+
+### Internal
+
+- New `HuggingFaceClient.isGhostFolder(at:)` — conservative signature returns true iff `blobs/` is missing or empty, deliberately excluding `.incomplete`-containing folders so a partial download from another tool can resume cleanly.
+- New `HuggingFaceClient.cleanGhostCacheFolders()` — scans the HF cache root, applies `isGhostFolder`, removes matching entries, and returns the list of removed modelIDs for the persistence layer. Best-effort: individual delete failures are swallowed silently so one broken entry can't block the rest of the cleanup.
+- New `PersistenceController.cleanGhostFoldersAndConfigs()` — wires the HF-side cleanup into the config layer: drops matching `ModelConfig`s, purges their `SecretStore` entries (`ModelConfig.secretAccount(for:)`), resets any `ModelRole` whose assigned modelID was just cleared. Logged via `os.Logger(subsystem: "com.ka1zen", category: "Persistence")` for diagnostics.
+- New `PersistenceController.migrateMultiVariantOrphans()` — placed after `migrateMaxTokens`. Walks every config, filters on `modelID.contains("/") && MultiVariantRepoRegistry.variants(for:) != nil`, computes installed-variants-of-this-repo from `installedModels`, and either drops or rewrites depending on whether a composite config already exists for any installed variant.
+- `PersistenceController.load()` ordering — `cleanGhostFoldersAndConfigs` → `syncWithInstalledModels` → `migrateMultiVariantOrphans`. Ghost cleanup must precede sync so sync sees the freshly cleaned state; orphan migration must follow sync so every installed variant has its own config in place before deduplication.
+- `PersistenceController` now imports `os` and uses a module-scoped `Logger` for migration audit trails — first logger in the persistence layer.
+
 ## [0.3.37] — 2026-05-12
 
 Three usability features ship together, all aimed at the discovery and quality of the image / model experience. **`BEST FIT` badge** ranks the right quantization for your Mac out of a model family's many variants. **Image preview window** opens a full-size detached viewer on a tap, with zoom and quick actions. **Edit-prompt optimization** rewrites your image edit instruction to the form that diffusion edit models actually follow — translated to English, negatives flipped to positive constraints, identity-preservation cues injected — so face / pose / composition drift on Qwen-Image-Edit and FLUX.2-Klein-Edit drop noticeably.
