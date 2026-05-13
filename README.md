@@ -225,6 +225,18 @@ Not without a separate agreement. Ka1zen is released under **PolyForm Noncommerc
 
 ---
 
+## Star history
+
+<a href="https://www.star-history.com/#Flor1an-B/Ka1zen&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Flor1an-B/Ka1zen&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Flor1an-B/Ka1zen&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Flor1an-B/Ka1zen&type=Date" width="640" />
+  </picture>
+</a>
+
+---
+
 ## Credits & acknowledgements
 
 Ka1zen stands on top of outstanding open-source work from the Apple ML team and the Hugging Face community. Go give them a star — they make on-device AI on the Mac actually possible:
