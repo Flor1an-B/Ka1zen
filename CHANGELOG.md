@@ -3,6 +3,38 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.39] — 2026-05-13
+
+Reasoning models that ship a sidecar `chat_template.jinja` (NVIDIA Nemotron-3-Nano, Qwen3-Next…) were systematically miscategorised as non-thinking by `Auto-detect`, so Ka1zen sent `enable_thinking=false` to `mlx_lm.server`. The template then injected an empty `<think></think>` block before generation, putting the model out-of-distribution and triggering hard **mode-collapse loops** on long-form prompts ("par parution par parution…", "35 minutes avant la publication…", `[22] [23] [24]…[167]` numerical drift). Three coordinated fixes ship together: stronger thinking detection (template-based + sidecar-parser-based + extended name patterns), an auto-applied **reasoning stability bundle** (`repetition_penalty=1.05`, `min_p=0.02`) that kills the residual repetition pathways once the thinking flag is right, and a one-shot retro-migration so users who already installed reasoning models before this build get the same protection without touching `Settings → Models`. **Zero per-model hardcoding** — every signal is generic and applies to any future thinking model published with the same conventions.
+
+### Fixed
+
+- **Mode-collapse loops on reasoning models** (`NVIDIA-Nemotron-3-Nano-30B-A3B-MLX-*`, and any model that ships `<think>` in its chat template). Root cause was a chain of cascading defaults: `Auto-detect` returned `supportsThinking=false`, `LLMClient` forwarded `enable_thinking=false` in `chat_template_kwargs`, the publisher template responded by emitting `<|im_start|>assistant\n<think></think>` (an empty pre-closed reasoning block, never seen during training), and the model collapsed onto repeating tokens/phrases as soon as the prompt was non-trivial. Fix is dynamic: any model whose template carries `<think>` / `<reasoning>` or that ships a `*reasoning_parser*.py` sidecar is now flagged as a thinking model at install time and at startup migration time, so `enable_thinking=true` flows through.
+
+- **Residual numerical / phrase repetition** even on reasoning models that were correctly flagged (the `[22] [23] [24]…[167]` drift the user saw under "Ouest-France"). Cured by auto-applying a stability bundle when `supportsThinking=true` and the publisher's `generation_config.json` is silent on these fields: `repetition_penalty=1.05` (kills any re-emitted token), `min_p=0.02` (drops the low-probability tail that compounds into runaway sequences). Publisher values always win — the bundle only fills holes.
+
+### Added
+
+- **Three new generic signals in `HuggingFaceClient.localCapabilities`** that detect thinking models without any per-model hardcoding:
+  - Template signal — `chat_template.jinja` sidecar file OR `tokenizer_config.json#chat_template` contains `<think>` or `<reasoning>`.
+  - Sidecar parser signal — snapshot directory contains a file matching `*reasoning_parser*` (NVIDIA's convention for new reasoning families).
+  - Extended name heuristics — `reasoning`, `nano-2`, `nano-3`, `-cot` added alongside the existing `qwen3 / deepseek-r1 / thinking / gemma3+ / mistral-{small-4,medium-4,large}` patterns.
+- **`readChatTemplate(at:)` helper in `HuggingFaceClient`** — reads `chat_template.jinja` first (newer convention) and falls back to inline `tokenizer_config.json["chat_template"]`. Used by the new thinking detection.
+- **Reasoning stability bundle in `ModelInstaller.registerConfig`** — when `supportsThinking` resolves to true and the publisher is silent on `repetition_penalty` / `min_p`, those fields are set to `1.05` and `0.02` respectively. Publisher's own values always take precedence.
+- **`SettingsView.resetToPublisherDefaults` now applies the stability bundle too** — clicking "Reset to publisher defaults" on a reasoning model whose publisher omits these fields gets the safe defaults rather than walking the user back into mode-collapse territory.
+- **One-shot `migrateReasoningStability` in `PersistenceController`** — retro-fits the stability bundle onto every locally-served thinking config that currently has `repetition_penalty=0` and `min_p=0`. Scope-limited to local endpoints (`127.0.0.1` / `localhost`), idempotent via `migrateReasoningStability_v1_done` UserDefaults flag. Runs after `migrateCapabilities` so any freshly-promoted thinking config is visible to the pass.
+
+### Changed
+
+- **`migrateCapabilities` now prefers `capabilitiesFromCache` over name heuristics** — reads `config.json` and the chat template itself rather than guessing from the modelID string. This is what catches Nemotron-3-Nano's thinking flag (its name has no `qwen3` / `r1` / `thinking` marker, but its template carries `<think>`).
+- **`migrateCapabilities` now applies the stability bundle on a `thinking false→true` transition** — only when the values are at 0 (the "never been set" state), only for local endpoints, never overwriting an intentional non-zero user choice.
+
+### Internal
+
+- Thinking detection in `HuggingFaceClient.localCapabilities` now layers four signals in priority order: chat-template content > sidecar reasoning_parser > model_type / architecture prefixes > name patterns. The first two are cache-only and survive renaming / re-quanting; the last two are the offline fallback when the cache isn't populated yet (e.g. browsing HF before download).
+- `ModelConfig.minP` is now explicitly set in the `ModelInstaller.registerConfig` constructor call (was defaulting to 0). The cascade respects publisher silence: if the publisher doesn't specify a generation param, the family fallback gets its chance; if the family fallback is silent too, the reasoning bundle's value applies; only then 0.
+- Migration ordering in `PersistenceController.load()` documented inline — `migrateLocalhostToLoopback` → `migrateCapabilities` → `migrateMaxTokens` → `migrateReasoningStability` → `cleanGhostFoldersAndConfigs` → `syncWithInstalledModels` → `migrateMultiVariantOrphans`. Each step's preconditions and dependencies on the previous steps are captured in the surrounding comments so the ordering can't drift accidentally.
+
 ## [0.3.38] — 2026-05-13
 
 Two startup hygiene migrations land together to fix the long-standing **phantom "Not installed" badge** on `Settings → Models`. Stale **ghost cache folders** (HuggingFace download stubs that died after the metadata fetch but before any blob landed — canonical signature is `refs/` present, `blobs/` empty) are now scanned and removed at app launch alongside their matching `ModelConfig`. A second migration catches legacy **bare configs of multi-variant repos** (e.g. `fcreait/Qwen-Image-Edit-mflux`) when the modern flow has already registered a composite config (`…/q8`) — the bare entry was a pure duplicate that produced a permanent orange badge. Both passes are idempotent and become no-ops after the first launch. The **User Guide** now documents the **BYOB** (Bring Your Own Backend) pattern: plug any OpenAI-compatible server (vLLM, Ollama, `llama-server`, LM Studio, MLC LLM, …) into Ka1zen's chat picker for bleeding-edge architectures that `mlx-lm` doesn't support yet (DeepSeek V4, MTP, exotic MoE).
