@@ -3,6 +3,21 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.42] — 2026-05-18
+
+Extends the fatal-error scanner so the **MoE weight-name convention mismatch** crash that surfaced on OsaurusAI / JANGQ-AI Qwen3.6-35B-A3B-MXFP8-MTP is now flagged with an actionable message instead of a bare Python `KeyError`. The model ships the *separate* MoE convention (`experts.gate_proj` + `experts.up_proj` as distinct tensors), while mlx-vlm 0.5.0's `qwen3_5_moe.py::sanitize` hard-codes the *fused* convention (`experts.gate_up_proj` as a single tensor). The Server Console auto-opens with a clean explanation pointing at the upstream issue rather than letting the user wonder if the download is corrupt or Ka1zen is misconfigured.
+
+### Fixed
+
+- **Bare `KeyError` on model load is now flagged as STUCK** with a meaningful badge instead of a silently-crashed server. Two new patterns added to `FatalErrorScanner.detect(in:)`:
+  - Specific: `KeyError:` + `gate_up_proj`/`up_gate_proj` → "MoE weight convention mismatch — checkpoint uses separate gate/up projections, mlx handler expects fused. Issue belongs upstream at github.com/Blaizzy/mlx-vlm or ml-explore/mlx-lm."
+  - Generic: `KeyError: '<key>'` thrown inside a function named `sanitize` → "Weight key missing during model sanitize — checkpoint structure doesn't match this mlx handler's expectations. See Server Console output for the exact key name."
+- Both messages preserve the badge red colour, auto-open the Server Console for the affected model, and trigger the auto-kill of the failed server so the Python process doesn't keep the port busy.
+
+### Internal
+
+- `FatalErrorScanner` whitelist extended from 3 to 5 patterns. Order matters — the specific gate_up_proj check sits before the generic `KeyError + in sanitize` regex so users get the more actionable message when both could match. The generic regex `KeyError: ['"][^'"]+['"]` plus the `in sanitize` co-occurrence keeps false-positive risk low (a non-fatal `KeyError` somewhere in a warning won't trip it).
+
 ## [0.3.41] — 2026-05-18
 
 Ships two independent improvements: an **auto-updater** (with one-click DMG install + relaunch, no more manual GitHub-and-drag-to-Applications routine for every release) and an **MTP (Multi-Token Prediction) badge** for checkpoints shipping self-speculative draft heads. The MTP badge is honest about reality: mlx-lm 0.31.3 detects MTP weights and silently drops them at load (`qwen3_5.py:313`), so the speedup published on model cards isn't exploited yet — the badge surfaces the latent capability without lying about runtime behaviour.
