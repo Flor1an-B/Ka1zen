@@ -3,6 +3,29 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.43] — 2026-05-19
+
+Polish release driven by real-world feedback after the 0.3.41 auto-updater shipped and got validated end-to-end by an external user upgrading 0.3.41 → 0.3.42. Four user-facing improvements: **Help → Check for Updates** now routes through the same banner UX as the background check, **the auto-installer cleans up the downloaded `.dmg`** from `~/Downloads` once the new build is in place, **the model picker gains a Favourites shortcut section** at the top so frequent models are one click away, and **the `Update prerequisites` log is colorised with collapsing of pip noise** so the lines that actually describe a change pop instead of drowning in `Requirement already satisfied:` repetition. Also fixes a silent newline bug in `PrerequisiteUpdater.append(line:)` that was glueing command echoes onto subprocess output (`$ pip3 install -U hf_transferRequirement already satisfied: …`) — caught while colorising the log.
+
+### Added
+
+- **Favourites section in the model picker.** New top section in `ModelPickerPopover` (chat header → model menu) listing every favourited config sorted alphabetically. Star icon in yellow + count chip matching `ModelFamilySectionHeader` styling. Favourites also remain in their family section below — same dual-listing pattern Finder uses for its sidebar shortcuts. Section is hidden entirely when no favourites are set, so users who don't use the feature see zero visual change.
+- **Colorised live log in the `Update prerequisites` sheet.** `UpdatePackagesSheet.logView` switches from a flat secondary-coloured `Text` to a per-line `LazyVStack` with conservative pattern matching for the signal-bearing rows: `$ command` (primary, semibold), `+ pkg==X` (green), `- pkg==Y` (red), `Successfully installed …` (green, semibold), `Modified <env>` (accent, semibold), `Downloaded …` / `Installed …` / `Updated …` (green), `ERROR:` / `Error:` / `Traceback` (red), `WARNING:` (orange). `Requirement already satisfied:` and `Nothing to upgrade` are faded to tertiary so the eye skips past them. Strict prefix-only matching avoids false-positives on the word "error" inside benign sentences.
+- **Consecutive `Requirement already satisfied:` runs collapsed into a single summary.** `logLines` post-processes the raw log and substitutes runs of N consecutive satisfied lines with `× N requirement(s) already satisfied`. On an up-to-date system this typically eliminates 50–80 lines of pip noise per package check while keeping the count accessible. Tertiary colour so it reads as ambient context.
+
+### Changed
+
+- **`Help → Check for Updates…` re-routed through `AutoUpdater.shared.checkNow()`.** Previously the menu had its own standalone `NSAlert` flow with a custom progress sheet, duplicating but not matching the in-app banner. Now it delegates to the same checker that backs the periodic auto-check, so a discovered update triggers the existing slide-in banner at the top of `ContentView` with **Install Now / Later / Skip This Version**. "No update available" and "Check failed" still surface as small popups since the banner has nothing to show in those cases.
+- **Installer script removes the downloaded DMG after relaunch.** The temp install script now does `rm -f "$DMG_PATH"` after the `open "$TARGET"` call so `~/Downloads` doesn't accumulate an `Ka1zen-X.Y.Z.dmg` per upgrade. Audit log line updated to record both deletions.
+
+### Fixed
+
+- **`PrerequisiteUpdater.append(line:)` was silently dropping newlines.** The function had `log += ""` (no-op) where it intended `log += "\n"`, so every appended chunk concatenated to whatever was already at the tail of `log` without separator. Visible symptom: command echo and subprocess output running into each other on the same line — `$ pip3 install -U hf_transferRequirement already satisfied: hf_transfer in ./Library/…`, `$ uv tool upgrade mfluxNothing to upgrade`. With the typo corrected each command echo now sits on its own line, the new colorising rules trip on the right tokens, and the log becomes scannable.
+
+### Removed
+
+- `Ka1zenCommands.downloadUpdate(url:version:)` (75 lines) and its sole helper `formatBytes(_:)`. Both were exclusive callers of the retired NSAlert update flow; their work is now done by `UpdateDownloader` (already used by the auto-updater) and `UpdateBannerView` (renders progress inline). `anchorWindow()` is preserved — still used by the surviving `presentAlert(_:)` for the About panel and update fallback popups.
+
 ## [0.3.42] — 2026-05-18
 
 Extends the fatal-error scanner so the **MoE weight-name convention mismatch** crash that surfaced on OsaurusAI / JANGQ-AI Qwen3.6-35B-A3B-MXFP8-MTP is now flagged with an actionable message instead of a bare Python `KeyError`. The model ships the *separate* MoE convention (`experts.gate_proj` + `experts.up_proj` as distinct tensors), while mlx-vlm 0.5.0's `qwen3_5_moe.py::sanitize` hard-codes the *fused* convention (`experts.gate_up_proj` as a single tensor). The Server Console auto-opens with a clean explanation pointing at the upstream issue rather than letting the user wonder if the download is corrupt or Ka1zen is misconfigured.
