@@ -5,7 +5,7 @@
 <h1 align="center">Ka1zen — User Guide</h1>
 
 <p align="center">
-  <strong>Local AI for Apple Silicon</strong> · Version 0.3.43 · by Florian Bertaux
+  <strong>Local AI for Apple Silicon</strong> · Version 0.3.44 · by Florian Bertaux
 </p>
 
 ---
@@ -523,6 +523,56 @@ Paste your token from [huggingface.co/settings/tokens](https://huggingface.co/se
 ### Automatic server startup
 
 If you send a message to a conversation whose model isn't running, Ka1zen tries to launch the server automatically and asks you to retry in a few seconds.
+
+### Fast Mode (Experimental) — Speculative decoding
+
+Ka1zen 0.3.44 introduces **Fast Mode**, an experimental integration of MTP (Google's Gemma 4 drafters) and DFlash (z-lab's Qwen 3.5/3.6, MiniMax, Kimi drafters) speculative decoding via mlx-vlm 0.5.0. Pair a small companion model with a chat target to make generation faster while keeping output quality mathematically identical.
+
+#### How to enable
+
+1. **Model Manager → Installed.** Find the row of a supported target (e.g. `gemma-4-31b-it-8bit`, `Qwen3.6-27B-mxfp8`).
+2. Click the **`⚡ Enable Fast Mode BETA`** chip.
+3. The sheet shows the companion model id, download size (typically 0.2–1 GB), and gain expectations for this specific architecture (dense vs MoE).
+4. **`Download & Enable`** — the companion downloads in the background. Once installed, the status row goes green (`Enabled`).
+5. **`▶ Launch`** the target. The server starts with `--draft-model <path>` and `--draft-kind` is auto-detected from the companion's `config.json`.
+6. In chat, the message footer shows `⚡ X.XX× MTP` or `⚡ X.XX× DFlash` next to the t/s reading.
+
+#### What "experimental" means here
+
+Real-world gains depend on three factors that vary widely across conversations:
+
+| Factor | Effect |
+|---|---|
+| **Target architecture** | Dense large models (Gemma 4 31B, Qwen 3.6 27B) gain 1.5–3×. MoE small-active models (Gemma 4 26B-A4B, Qwen 3.6 35B-A3B) gain ~0× on Apple Silicon single-user — Google [documents this](https://blog.google/innovation-and-ai/technology/developers-tools/multi-token-prediction-gemma-4/) as a routing-overhead limitation that only batched inference (4–8 concurrent requests) overcomes. |
+| **Context length** | At < 2 K tokens of prompt, gains are at their peak. Beyond 2 K, the companion's prediction accuracy drops sharply (accept rate degrades from ~6 to ~1.5). |
+| **Output entropy** | Predictable patterns (code, structured math, reasoning chains) accept well. High-entropy content (multi-thread news summaries with proper nouns and dates) can drop accept rate so low that the draft overhead exceeds the savings — Ka1zen surfaces this with a **red** indicator + warning tooltip in the chat footer. |
+
+#### Measured benchmarks (Apple Silicon M-series, mlx-vlm 0.5.0)
+
+| Target | Family | Prompt | Real-world gain |
+|---|---|---|---|
+| Gemma 4 31B-it-8bit (dense) | MTP | code, short | **1.94×** |
+| Qwen 3.6 27B-mxfp8 (dense) | DFlash | code, short | **2.77×** |
+| Qwen 3.6 27B-mxfp8 (dense) | DFlash | code, 3.8 K input | ≈ 1.2× |
+| Qwen 3.6 35B-A3B (MoE) | DFlash | code, short | 0.98× (neutral) |
+
+#### Where Fast Mode drafts live
+
+Companion models (gemma-4-*-assistant, *-DFlash) auto-register as installed models but are **not chat-capable standalone** — selecting one in the chat picker would return garbage. They are:
+
+- **Hidden** from the chat model picker.
+- **Grouped** in a dedicated `Fast Mode drafts EXPERIMENTAL` section at the bottom of Model Manager → Installed, so you can delete or inspect them.
+- **Auto-paired** with their canonical target via Ka1zen's known-pairings table (no manual setup).
+
+#### Settings master toggle
+
+**Settings → Performance → `Fast Mode (speculative decoding) EXPERIMENTAL`** is on by default and applies to all per-model pairings. Turn it off if you want to ignore every pairing without clearing them — flipping back on restores them. Click `Learn more` for sources and the full architecture explainer.
+
+#### Known limitations
+
+- **Cold start** of the first chat after launch can take 30–90 s longer than usual (target + drafter to load + Metal JIT compilation). A timeout the first time is normal; subsequent requests are fast.
+- **No adaptive disable**: when a single request shows catastrophic acceptance, mlx-vlm 0.5.0 doesn't fall back to non-speculative generation. Ka1zen's indicator informs you (red triangle + tooltip) but doesn't auto-toggle. Disable in Settings if your typical workload doesn't benefit.
+- **mlx-vlm 0.5.0 sampling bug** with DFlash + `top_p < 1.0` is auto-handled — Ka1zen silently sends `top_p = 1.0` for these requests only. The workaround disengages automatically the moment upstream patches the issue.
 
 ---
 

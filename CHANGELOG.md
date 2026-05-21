@@ -3,6 +3,49 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.44] — 2026-05-20
+
+**Fast Mode (Experimental)** — speculative decoding via MTP and DFlash drafters. Pair a small companion model with a chat target to generate tokens 1.5–3× faster on dense large models with short prompts; output quality is mathematically preserved via rejection sampling. Marked **Experimental** because real-world gains vary widely by target architecture, workload type, and context length — and we'd rather ship honest measured benchmarks than the marketing-grade "up to 3×" headline. Includes adaptive workaround for an mlx-vlm 0.5.0 sampling bug, dedicated drafts section in Model Manager, color-coded live indicator showing whether the current request is actually benefitting, and a port-deduplication migration that prevents cross-target server hot-swap crashes when Fast Mode is active.
+
+### Added
+
+- **Fast Mode pairing UI (Experimental).** New `[⚡ Enable Fast Mode BETA]` chip on every chat target's row in Model Manager when a canonical companion draft exists for that family (Gemma 4 MTP, Qwen 3.5/3.6 DFlash, MiniMax-M2.7, Kimi-K2.6). Clicking opens a sheet with the draft id, download size, expected gain band (with explicit MoE warning when applicable), and 1-click `Download & Enable` / `Enable Fast Mode` / `Disable` action. Sheet adapts copy when the draft is already on disk so users aren't told to re-download.
+- **Live Fast Mode indicator in the chat footer.** Parses the `[MTP] ... accept=X.XX rounds=N` and `[DFlash] ... accept=X.XX rounds=N` lines emitted by `mlx_vlm.server` (see `server.py:838`) and renders `1.X× MTP` / `2.X× DFlash` next to the t/s reading. Colour codes: green ≥ 0.5 (helping), orange 0.2–0.5 (modest), **red + warning icon < 0.2** (Fast Mode is hurting on this prompt — tooltip suggests disabling in Settings). Honestly surfaces the workload-dependence of speculative decoding so users aren't left in the dark.
+- **`Fast Mode drafts` section in Model Manager.** Companion drafters auto-register as `ModelConfig`s but are not chat-capable standalone (0.5 B / 78 M models with no instruction tuning). Section header `Fast Mode drafts EXPERIMENTAL N` groups them at the bottom of the Installed list, separate from chat models grouped by family. Also filtered out of the chat model picker so a novice can't select one and chat with the drafter directly (returns garbage).
+- **Settings → Performance → Fast Mode toggle (Experimental).** Master switch — when off, all per-model pairings are ignored at launch (without being cleared). When on, each target uses its configured `draftModelID`. Detailed `Learn more` sheet shows real measured benchmarks, known limitations, sampling caveats, sources (Google MTP blog, z-lab DFlash paper, mlx-vlm release notes, Unsloth GGUF cards), and the under-the-hood architecture explainer.
+- **Adaptive workaround for mlx-vlm 0.5.0 DFlash + `top_p < 1.0` sampling bug.** Statically introspects the installed `mlx_vlm/sample_utils.py` for the buggy `take_along_axis(...).squeeze(-1)` line. When detected AND the active config has a DFlash draft AND the user's `top_p < 1.0`, Ka1zen silently sends `top_p = 1.0` in the chat request — the user's saved config is untouched, the `categorical` sampler path is exercised, and DFlash works as designed. The moment upstream patches that exact line, the marker no longer matches and the workaround disengages automatically — zero maintenance required when 0.5.1 ships.
+- **Port-collision migration at startup (`PersistenceController.deduplicateConfigPorts`).** Historic `nextAvailablePort` allocated the same canonical VLM port (8081) to multiple configs as long as they weren't co-running. With Fast Mode that's catastrophic: a chat-send to config B routes to config A's running server, mlx-vlm hot-swaps the target inside the process but keeps the original `--draft-model`, and the draft's hidden dimensions don't match the new target → `[matmul] Cannot squeeze axis -1 with size 15` crash. Migration walks every local config, detects shared ports, and bumps later collisions to the next free port in the same band (VLM 8081+, text 8080+). Idempotent.
+- **Port-collision check at launch.** Before spawning a server, scans running processes and stops any that's currently bound to the target port for a different model. Secondary safety net behind the migration — covers the case where the user reuses port assignments manually.
+- **MoE on Apple Silicon warning** in the Enable Fast Mode sheet when the target name matches `-A[0-9]B` (e.g. `Qwen3.6-35B-A3B`, `gemma-4-26B-A4B`). Quotes Google's own MTP blog: *"the 26B mixture-of-experts model presents unique routing challenges at a batch size of 1 on Apple Silicon, processing multiple requests simultaneously (e.g., batch sizes of 4 to 8) unlocks up to a ~2.2x speedup locally"*. Ka1zen is inherently single-user (batch = 1) so MoE targets show ~1× speedup in our measurements — the warning sets expectations honestly before the user spends bandwidth on a download that won't help much.
+
+### Measured gains (Apple Silicon M-series, Ka1zen 0.3.44, mlx-vlm 0.5.0)
+
+| Target | Architecture | Drafter | Prompt | Accept | Real-world ratio |
+|---|---|---|---|---|---|
+| Gemma 4 31B-it-8bit | Dense 33 B | MTP (`gemma-4-31B-it-assistant-bf16`) | code, 500 tok | 2.35 | **1.94×** |
+| Qwen 3.6 27B-mxfp8 | Dense 27 B | DFlash (`z-lab/Qwen3.6-27B-DFlash`) | code, 800 tok | 6.14 | **2.77×** |
+| Qwen 3.6 35B-A3B-8bit | MoE 3.8 B active | DFlash (`z-lab/Qwen3.6-35B-A3B-DFlash`) | code, 800 tok | 1.93 | **0.98×** (neutral — Apple Silicon MoE batch=1 limitation) |
+| Qwen 3.6 27B-mxfp8 | Dense 27 B | DFlash | 3.8 K-token input | 1.41 | ≈ 1.2× (long context degrades acceptance) |
+
+### Sources
+
+- Google MTP for Gemma 4: <https://blog.google/innovation-and-ai/technology/developers-tools/multi-token-prediction-gemma-4/>
+- z-lab DFlash paper & official benchmarks: <https://z-lab.ai/projects/dflash/>
+- Unsloth `Qwen3.6-27B-MTP-GGUF` (claims 1.5–2×, consistent with our measurements): <https://huggingface.co/unsloth/Qwen3.6-27B-MTP-GGUF>
+- mlx-vlm 0.5.0 release notes (first release with DFlash + MTP support): <https://github.com/Blaizzy/mlx-vlm/releases>
+
+### Known limitations (transparent)
+
+- **Mixture-of-Experts targets** on Apple Silicon at batch = 1 show near-zero gain. Per Google's own documentation, this requires batched inference (4–8 concurrent requests) which Ka1zen as a single-user chat doesn't deliver. The MoE warning in the Enable Fast Mode sheet calls this out before the user downloads the companion.
+- **Long contexts** (> 2 K tokens of prompt) sharply reduce the drafter's prediction accuracy because the KV cache state grows past what the small companion model can track. Real-world gain shrinks to 1.0–1.3×.
+- **High-entropy content** (multi-thread news summaries, factual writing with proper nouns and dates) can produce acceptance rates so low (~0.06 measured on Gemma 4 31B + news prompt) that the draft overhead exceeds the savings. Live indicator turns red with a warning tooltip suggesting the user disable Fast Mode for that workload.
+- **Cold start** is longer on the first request after launch (target + drafter to load + Metal JIT kernel compilation for new shapes). A 60-second timeout the first time around is normal; subsequent requests are fast.
+- **No adaptive disable** — when a single request shows catastrophic acceptance, mlx-vlm 0.5.0 doesn't fall back to non-spec generation. The indicator informs the user but Ka1zen doesn't auto-toggle. Likely upstream improvement in a future mlx-vlm release.
+
+### Fixed
+
+- **Cross-target server hot-swap crash with Fast Mode active.** Two configs sharing port 8081 + Fast Mode enabled on the first → chat-send to the second hits the wrong server → mlx-vlm hot-swaps target but keeps the original `--draft-model` → `[matmul] Cannot squeeze axis -1 with size 15` crash. Fixed by the port-deduplication migration + the launch-time conflict check described above.
+
 ## [0.3.43] — 2026-05-19
 
 Polish release driven by real-world feedback after the 0.3.41 auto-updater shipped and got validated end-to-end by an external user upgrading 0.3.41 → 0.3.42. Four user-facing improvements: **Help → Check for Updates** now routes through the same banner UX as the background check, **the auto-installer cleans up the downloaded `.dmg`** from `~/Downloads` once the new build is in place, **the model picker gains a Favourites shortcut section** at the top so frequent models are one click away, and **the `Update prerequisites` log is colorised with collapsing of pip noise** so the lines that actually describe a change pop instead of drowning in `Requirement already satisfied:` repetition. Also fixes a silent newline bug in `PrerequisiteUpdater.append(line:)` that was glueing command echoes onto subprocess output (`$ pip3 install -U hf_transferRequirement already satisfied: …`) — caught while colorising the log.
