@@ -3,7 +3,50 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.44] — 2026-05-20
+## [0.3.45] — 2026-05-25
+
+**Hotfix Fast Mode** — fixes the catastrophic 0.5× slowdown on tool-augmented and long-context workloads that was masked by our pre-release benchmarks. Single critical change: Ka1zen now passes `--draft-block-size 2` to mlx-vlm when launching with a DFlash drafter, overriding mlx-vlm 0.5.0's default of 16. This matches Unsloth's official Qwen 3.6 documentation recommendation (`--spec-draft-n-max 2`) and transforms the bad case from -43% perf into +28% gain.
+
+### Root cause
+
+mlx-vlm 0.5.0's `_dflash_rounds_batch` runs a parallel forward of `block_size` positions per round (default 16, matching the drafter's training value). On Apple Silicon with single-user batch=1, this large-K forward has fixed overhead from MoE expert routing and KV cache management that grows with K. When acceptance rate is low (long context, high-entropy content, tool results), the wasted compute at K=16 dwarfs the parallelism savings — net throughput drops below baseline. K=2 caps the wasted compute while preserving the amortization benefit.
+
+### Measured before/after (Qwen 3.6 35B-A3B-8bit, MoE, long high-entropy prompt)
+
+| block_size | TPS | Ratio | Accept |
+|---|---|---|---|
+| baseline (no Fast Mode) | 53.3 | 1.00× | — |
+| 16 (mlx-vlm default) | 30.5 | **0.57× ❌** | 0.53 |
+| 8 | 41.0 | 0.77× | 0.62 |
+| 4 | 55.4 | 1.04× | 0.54 |
+| **2** | **68.2** | **1.28× ✅** | 0.46 |
+
+Verified on M5 Max 614 GB/s. The block_size override is applied only to DFlash drafters (Qwen 3.5/3.6, MiniMax, Kimi families). MTP drafters (Gemma 4 `-assistant` series) keep `block_size=4` — our E4B bench at 2026-05-20 showed K=4 beats K=2 on dense small targets with the MTP architecture.
+
+### Sources
+
+- [Unsloth Qwen 3.6 documentation](https://unsloth.ai/docs/models/qwen3.6.md): *"Optimal setting: `--spec-draft-n-max 2` with 83% token acceptance rate; higher values see diminishing returns."* Documents 1.4× speedup on dense, 1.15-1.25× on MoE — far below the marketing-grade "up to 3×" headline.
+- [mlx-vlm GitHub issue #1121](https://github.com/Blaizzy/mlx-vlm/issues/1121): *"Gemma 4 MTP drafter shows negative speedup on Apple Silicon"* — other users hit the same default-block-size class of regression.
+- [vLLM speculative decoding docs](https://docs.vllm.ai/en/latest/features/spec_decode.html): explicitly states *"speculative decoding in vLLM is not yet optimized and does not usually yield inter-token latency reductions for all prompt datasets or sampling parameters"* — the whole spec-dec ecosystem acknowledges workload sensitivity.
+
+### Updated benchmark table (Apple Silicon M5 Max, mlx-vlm 0.5.0 + Ka1zen 0.3.45 with `--draft-block-size 2` for DFlash)
+
+| Target | Architecture | Drafter | Prompt | Real-world ratio |
+|---|---|---|---|---|
+| Gemma 4 31B-it-8bit | Dense 33 B | MTP (block=4) | code, short | 1.94× ✅ unchanged |
+| Qwen 3.6 27B-mxfp8 | Dense 27 B | DFlash (block=2) | code, short | ~2.0× ✅ (lower than the 2.77× we previously claimed at block=16 + short code — that was a best-case outlier) |
+| Qwen 3.6 35B-A3B-8bit | MoE 3.8 B | DFlash (block=2) | long context + tools | **1.28×** (was 0.57× at block=16) |
+| Qwen 3.6 27B-mxfp8 | Dense 27 B | DFlash (block=2) | long context + tools | TBD — user-validated next |
+
+### Methodology lesson learned
+
+Our pre-release 0.3.44 benchmarks used short isolated code prompts at low temperature. They did not represent the real Ka1zen workload (tools + web search + long context + Qwen's recommended sampling). The "Fast Mode = 0.98× neutral on MoE" claim in the 0.3.44 CHANGELOG was wrong for real workflows. We've added a `long-context + tools` workload to our internal bench fixture so future Fast Mode regressions on this shape are caught before release.
+
+### Fixed
+
+- Fast Mode now delivers measurable gain on Qwen 3.6 35B-A3B (MoE) at long context with tools — previously a 43% regression, now +28%. Documented user impact: tool-augmented chats no longer pay a fast-mode overhead larger than the benefit.
+
+## [0.3.44] — 2026-05-21
 
 **Fast Mode (Experimental)** — speculative decoding via MTP and DFlash drafters. Pair a small companion model with a chat target to generate tokens 1.5–3× faster on dense large models with short prompts; output quality is mathematically preserved via rejection sampling. Marked **Experimental** because real-world gains vary widely by target architecture, workload type, and context length — and we'd rather ship honest measured benchmarks than the marketing-grade "up to 3×" headline. Includes adaptive workaround for an mlx-vlm 0.5.0 sampling bug, dedicated drafts section in Model Manager, color-coded live indicator showing whether the current request is actually benefitting, and a port-deduplication migration that prevents cross-target server hot-swap crashes when Fast Mode is active.
 
