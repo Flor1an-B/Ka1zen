@@ -33,7 +33,45 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - **Downloads in progress view** (`DownloadsView.swift`). New toolbar button on Model Manager (capsule with a download counter) that opens a dedicated sheet listing every model currently being pulled — phase label (listing files / downloading / done / failed), live progress bar, percentage. Hidden when nothing is in flight. Replaces the previous flow where users had to scroll through the Browse tab to find which models they had clicked. Auto-closes 800 ms after the last download completes.
 
-### 4-bit variant cross-check
+### Performance benchmarks — full matrix
+
+All numbers measured on Apple Silicon M5 Max (614 GB/s memory bandwidth, 128 GB unified), `mlx-vlm 0.5.0` + Ka1zen 0.3.47, French prompts with `temperature=1.0, top_p=0.95, top_k=20/64` per family. TPS = `completion_tokens / total_elapsed_time` (includes prefill — slightly underestimates Ka1zen's in-app generation TPS which excludes prefill, but ratios between configs are consistent). All output verified clean of CJK character leaks unless explicitly noted.
+
+#### 8-bit variants — multi-run averages per prompt size
+
+**Qwen 3.6 27B-mxfp8** (dense)
+
+| Prompt | baseline | kv4_g32 | kv8 | Fast Mode |
+|---|---|---|---|---|
+| short (~140 out) | 16.7 t/s | — | 18.4 t/s | **31.6 t/s** (+89%) |
+| medium (1700 in / ~250 out) | 15.4 t/s | 16.1 t/s | **16.5 t/s** (+7%) | 11.6 t/s (-25%) |
+| code_long (~1300 out) | 17.0 t/s | — | 18.7 t/s | **30.9 t/s** (+82%) |
+
+**Qwen 3.6 35B-A3B-8bit** (MoE, primary daily-driver)
+
+| Prompt | baseline | kv4_g32 | kv8 | Fast Mode |
+|---|---|---|---|---|
+| short | 70.9 t/s | — | **83.6 t/s** (+18%) | 47.7 t/s (-33%) |
+| medium | 67.2 t/s | 78.9 t/s ⚠️ 3 CJK chars | **79.4 t/s** (+18%) | 29.6 t/s ⚠️ 2 CJK (-56%) |
+| code_long | 74.4 t/s | — | **88.8 t/s** (+19%) | 48.0 t/s (-35%) |
+
+**Gemma 4 26B-A4B-it-8bit** (MoE)
+
+| Prompt | baseline | kv4_g32 | kv8 | Fast Mode |
+|---|---|---|---|---|
+| short | 82.4 t/s | — | 82.4 t/s (0%) | **95.0 t/s** (+15%) |
+| medium | 71.2 t/s | 67.5 t/s (-5%) | 68.9 t/s (-3%) | 49.2 t/s (-31%) |
+| code_long | 81.2 t/s | — | 84.8 t/s (+4%) | **110.9 t/s** (+37%) |
+
+**Gemma 4 31B-it-8bit** (dense)
+
+| Prompt | baseline | kv4_g32 | kv8 | Fast Mode |
+|---|---|---|---|---|
+| short | 15.2 t/s | — | 14.6 t/s (-4%) | **26.5 t/s** (+74%) |
+| medium | 12.6 t/s | 11.7 t/s (-7%) | 11.7 t/s (-7%) | **13.6 t/s** (+8%) |
+| code_long | 14.9 t/s | — | 14.4 t/s (-3%) | **21.3 t/s** (+43%) |
+
+#### 4-bit variant cross-check
 
 After the 8-bit bench, we also tested the standard 4-bit variants (the common quantization most users download) on the same medium-prompt workload:
 
@@ -45,6 +83,15 @@ After the 8-bit bench, we also tested the standard 4-bit variants (the common qu
 | Gemma 4 31B-it-4bit | 19.0 t/s | 15.6 t/s | 12.6 t/s | +51% |
 
 4-bit gives the biggest raw speedup on dense models (Qwen 27B +49%, Gemma 31B +51%) and a smaller bump on MoE-A3B variants (+13–21%, since MoE is already memory-light per token). KV q8 stacks on top for an extra +12–19% on most configs. The one anomaly — Gemma 4 31B-4bit + KV q8 measuring −18% on N=2 — did not reproduce in the user's own 6-run real Ka1zen sample (22 t/s stable across configs), so it's recorded as bench noise rather than a true regression. The Settings recommendation table reflects this honestly.
+
+#### User-validated real-world runs (Ka1zen 0.3.47, generation_tps from in-app stats)
+
+- **Qwen 3.6 35B-A3B-4bit + KV q8**: 98.6 t/s on a 1507-token output (4469-token input).
+- **Gemma 4 31B-it-4bit (KV q8 default)** across 6 chats:
+  - With tools active (~5–7K token input): 24.0 / 23.4 / 19.1 t/s (avg 22.2)
+  - Without tools (~0.4–4K token input): 24.3 / 21.6 / 23.8 t/s (avg 23.2)
+
+These are higher than the synthetic bench because Ka1zen reports `completion_tokens / decode_time` (excludes prefill), while the synthetic bench above reports `completion_tokens / total_request_time`. The ratios between configs hold; the absolute numbers in Ka1zen's UI are the real "tokens per second of generation" you experience.
 
 ### Considered but not shipped (intellectual honesty)
 
