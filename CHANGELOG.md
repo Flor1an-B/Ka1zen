@@ -33,82 +33,71 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - **Downloads in progress view** (`DownloadsView.swift`). New toolbar button on Model Manager (capsule with a download counter) that opens a dedicated sheet listing every model currently being pulled — phase label (listing files / downloading / done / failed), live progress bar, percentage. Hidden when nothing is in flight. Replaces the previous flow where users had to scroll through the Browse tab to find which models they had clicked. Auto-closes 800 ms after the last download completes.
 
-### Performance benchmarks
+### Performance benchmarks (4-bit variants, Ka1zen-equivalent metric)
 
-**Tested on:** Apple Silicon M5 Max (40-core GPU, 614 GB/s memory bandwidth, 128 GB unified memory), Ka1zen 0.3.47 with `mlx-vlm 0.5.0`. Prompts in French, sampling = each model's official recommendation (temperature 1.0, top_p 0.95, top_k 20 for Qwen / 64 for Gemma). Output verified clean — no character leaks unless flagged with ⚠️.
+**Tested on:** Apple Silicon M5 Max (40-core GPU, 614 GB/s memory bandwidth, 128 GB unified memory), Ka1zen 0.3.47 with `mlx-vlm 0.5.0`. Prompts in French, sampling = each model's official recommendation (temperature 1.0, top_p 0.95, top_k 20 Qwen / 64 Gemma; Fast Mode forces top_p=1.0 to dodge the mlx-vlm 0.5.0 squeeze bug). N=3 runs per cell, averaged. Output scanned for CJK character leaks — flagged with ⚠️ when found.
 
-**Three prompt sizes** simulate the Ka1zen workloads users actually run:
-- **Short** — code generation prompt, ~140 tokens output (e.g. "Write a quicksort function").
-- **Medium** — chat with web-search tools active, ~1.7K tokens of context, ~250-400 tokens of French response (representative of daily tool-augmented chat).
-- **Long code** — class implementation + unit tests, ~1.5K tokens of code output.
+**Metric** = `generation_tps` measured client-side from the streaming response as `(completion_tokens − 1) / (last_token_time − first_token_time)`. This is **exactly the number Ka1zen displays in its UI** (decode-only TPS, excluding prefill). mlx-vlm 0.5.0 declares these fields but doesn't populate them in non-streaming mode, so we measure them ourselves.
+
+**Three workloads** simulate real Ka1zen usage:
+- **Short code** — single function (`quicksort`), ~200 tokens output.
+- **Medium chat with tools** — system prompt with 3 web-search results + user question, ~1.7K tokens context, ~300 tokens of French response.
+- **Long code** — full `LRUCache` class + unit tests, ~1500 tokens output.
 
 **Two optimizations** tested per model:
-- **KV cache q8** — quantizes the attention KV cache to 8 bits. Toggle in Settings → Performance (ON by default since 0.3.47).
-- **Fast Mode** — speculative decoding. Uses **DFlash** drafters on the Qwen family, **MTP** drafters on the Gemma family. Toggle in Settings → Performance (opt-in OFF).
+- **KV cache q8** — quantizes the attention KV cache to 8 bits uniform group_size=64. ON by default since 0.3.47, toggle in Settings → Performance.
+- **Fast Mode** — speculative decoding. **DFlash** drafters on Qwen, **MTP** drafters on Gemma. Opt-in OFF, toggle in Settings → Performance.
 
-#### Qwen 3.6 27B-mxfp8 (dense)
+#### Qwen 3.6 27B-4bit (dense)
 
-| Workload | Nothing | + KV cache q8 | + DFlash (Fast Mode) |
-|---|---|---|---|
-| Short code | 16.7 t/s | 18.4 t/s | **31.6 t/s · +89%** |
-| Medium chat with tools | 15.4 t/s | **16.5 t/s · +7%** | 11.6 t/s · −25% |
-| Long code | 17.0 t/s | 18.7 t/s | **30.9 t/s · +82%** |
-
-**Winner:** DFlash for code workloads, KV cache q8 for tool-augmented chat. Both options keep output clean.
-
-#### Qwen 3.6 35B-A3B-8bit (Mixture-of-Experts, primary daily-driver)
-
-| Workload | Nothing | + KV cache q8 | + DFlash (Fast Mode) |
-|---|---|---|---|
-| Short code | 70.9 t/s | **83.6 t/s · +18%** | 47.7 t/s · −33% |
-| Medium chat with tools | 67.2 t/s | **79.4 t/s · +18%** | 29.6 t/s · −56% ⚠️ CJK leak |
-| Long code | 74.4 t/s | **88.8 t/s · +19%** | 48.0 t/s · −35% |
-
-**Winner: KV cache q8 across the board (+18–19%).** DFlash regresses on every workload and leaks CJK characters on tool-augmented chat — don't enable Fast Mode on this model.
-
-#### Gemma 4 26B-A4B-it-8bit (Mixture-of-Experts)
-
-| Workload | Nothing | + KV cache q8 | + MTP (Fast Mode) |
-|---|---|---|---|
-| Short code | 82.4 t/s | 82.4 t/s | **95.0 t/s · +15%** |
-| Medium chat with tools | 71.2 t/s | 68.9 t/s · −3% | 49.2 t/s · −31% |
-| Long code | 81.2 t/s | 84.8 t/s | **110.9 t/s · +37%** |
-
-**Winner:** MTP for code, nothing for tool-augmented chat (KV cache q8 is slightly negative, MTP catastrophic). Output clean throughout.
-
-#### Gemma 4 31B-it-8bit (dense)
-
-| Workload | Nothing | + KV cache q8 | + MTP (Fast Mode) |
-|---|---|---|---|
-| Short code | 15.2 t/s | 14.6 t/s | **26.5 t/s · +74%** |
-| Medium chat with tools | 12.6 t/s | 11.7 t/s · −7% | **13.6 t/s · +8%** |
-| Long code | 14.9 t/s | 14.4 t/s | **21.3 t/s · +43%** |
-
-**Winner: MTP everywhere (+8% to +74%).** KV cache q8 is slightly negative on this model — disable it if Gemma 4 31B-it is your primary.
-
-#### "Should I use the 4-bit version instead?" — yes, in most cases
-
-Most users on HuggingFace download the standard 4-bit variants rather than 8-bit. We re-ran the medium-chat-with-tools workload on the 4-bit equivalents of each model:
-
-| Model | 8-bit baseline | 4-bit baseline | Speedup from 4-bit | 4-bit + KV q8 |
+| Workload | Nothing | + KV q8 | + DFlash | + DFlash + KV q8 |
 |---|---|---|---|---|
-| Qwen 3.6 27B (dense) | 15.4 t/s | 23.0 t/s | **+49%** | 25.7 t/s |
-| Qwen 3.6 35B-A3B (MoE) | 67.2 t/s | 75.9 t/s | +13% | **90.1 t/s** |
-| Gemma 4 26B-A4B (MoE) | 71.2 t/s | 86.2 t/s | +21% | 84.5 t/s |
-| Gemma 4 31B (dense) | 12.6 t/s | 19.0 t/s | **+51%** | 15.6 t/s |
+| Short code | 28.4 t/s | **32.0 · +13%** | 33.5 · +18% | 29.0 ⚠️ 1 CJK |
+| Medium chat with tools | 27.8 t/s | **31.4 · +13%** | 16.6 · −40% | 17.2 ⚠️ 5 CJK |
+| Long code | 27.8 t/s | **31.0 · +12%** | 23.9 · −14% | 26.3 |
 
-**Takeaway:** 4-bit gives the largest single speedup on dense models (Qwen 27B +49%, Gemma 31B +51%). On MoE models the boost is smaller (+13–21%) because Mixture-of-Experts is already memory-light per token. KV cache q8 stacks on top for an extra +12–19% on the Qwen family; it's neutral-to-negative on Gemma 4-bit.
+**Winner: KV cache q8 across the board (+12–13%).** DFlash gives a small boost on short code but tanks medium chat (−40%) and leaks CJK when stacked with KV q8 — leave Fast Mode off.
 
-#### Real-world runs (Ka1zen in-app stats)
+#### Qwen 3.6 35B-A3B-4bit (Mixture-of-Experts — primary daily-driver)
 
-Numbers users see in their own chats — these come from Ka1zen's UI `generation_tps` indicator, not the synthetic bench:
+| Workload | Nothing | + KV q8 | + DFlash | + DFlash + KV q8 |
+|---|---|---|---|---|
+| Short code | 97.7 t/s | **124.6 · +28%** | 51.3 · −47% | 41.4 · −58% |
+| Medium chat with tools | 94.5 ⚠️ 2 CJK | **119.4 · +26%** | 40.2 · −57% | 39.4 · −58% |
+| Long code | 93.8 ⚠️ 2 CJK | **118.2 · +26%** | 42.8 · −54% | 43.9 ⚠️ 7 CJK |
 
-- **Qwen 3.6 35B-A3B-4bit + KV cache q8:** 98.6 t/s on a 1507-token output (4469-token input)
-- **Gemma 4 31B-it-4bit + KV cache q8** across 6 real chats:
-  - With web-search tools (~5–7K input): **22.2 t/s avg** (24.0 / 23.4 / 19.1)
-  - Without tools (~0.4–4K input): **23.2 t/s avg** (24.3 / 21.6 / 23.8)
+**Winner: KV cache q8 — massive +26–28% gain AND it cleans up the rare CJK leaks the baseline shows.** Fast Mode is catastrophic on this MoE target (regression on every workload, plus CJK leak when stacked). Never enable Fast Mode here.
 
-The in-app numbers run higher than the synthetic bench because Ka1zen measures `decode_time` only (excludes the prefill phase where the model reads your prompt). The bench tables above include prefill — useful for comparing configs, but Ka1zen's UI is what you actually feel.
+#### Gemma 4 26B-A4B-it-4bit (Mixture-of-Experts)
+
+| Workload | Nothing | + KV q8 | + MTP | + MTP + KV q8 |
+|---|---|---|---|---|
+| Short code | 117.9 t/s | 118.0 | 101.8 · −14% | 100.8 · −14% |
+| Medium chat with tools | 111.7 t/s | 111.8 | 98.1 · −12% | 99.6 |
+| Long code | 109.3 t/s | 109.3 ⚠️ 1 CJK | **114.0 · +4%** | **115.0 · +5%** |
+
+**Winner: nothing — the model is already memory-saturated at 4-bit MoE.** KV q8 is exactly neutral. MTP helps only on long code (+4–5%) and regresses elsewhere. Honest recommendation: leave both toggles off on this one; it's fast enough.
+
+#### Gemma 4 31B-it-4bit (dense)
+
+| Workload | Nothing | + KV q8 | + MTP | + MTP + KV q8 |
+|---|---|---|---|---|
+| Short code | 25.2 t/s | 24.7 · −2% | 30.5 · +21% | **32.1 · +27%** |
+| Medium chat with tools | 24.8 t/s | 24.5 · −1% | 29.0 · +17% | **29.3 · +18%** |
+| Long code | 23.7 t/s | 23.5 · −1% | 28.9 · +22% | **30.0 · +27%** |
+
+**Winner: MTP + KV cache q8 stacked (+18–27% across all workloads).** KV q8 alone is neutral on this target, but stacking it with MTP gives a small additional bump. Output clean throughout.
+
+#### Cross-model summary
+
+| Model | Best config | Gain vs baseline |
+|---|---|---|
+| Qwen 3.6 27B-4bit | KV q8 | **+13%** |
+| Qwen 3.6 35B-A3B-4bit | KV q8 | **+26 to +28%** |
+| Gemma 4 26B-A4B-4bit | Nothing | (neutral) |
+| Gemma 4 31B-it-4bit | MTP + KV q8 | **+18 to +27%** |
+
+The default KV q8 ON shipped in 0.3.47 is validated: clear win on the Qwen family, neutral on Gemma. Fast Mode remains opt-in and is only worth enabling on Gemma 4 31B-it dense.
 
 ### Considered but not shipped (intellectual honesty)
 
