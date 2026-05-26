@@ -3,6 +3,57 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.47] — 2026-05-26
+
+**Performance polish across both `mlx_vlm.server` and `mlx_lm.server` launches, plus a UI shortcut.** Researched every flag and env var the two MLX server libraries expose, identified four that Ka1zen wasn't using, and wired them in. Also added a Favourites section at the top of Settings → Models, mirroring the same shortcut pattern the chat model picker has used since 0.3.43.
+
+### Added
+
+- **`MLX_VLM_TOKEN_QUEUE_TIMEOUT=1800` env var on every mlx-vlm launch.** The default (~600s) was hit during 0.3.45's Fast Mode bench when a long-prefill request collided with first-time Metal kernel JIT. With KV quant + 5K-token prompts users could see the same failure mode silently as a timeout. 1800s gives kernel compilation room to settle while still bounding silent hangs. Zero-risk hardening — no impact on healthy requests.
+- **`--decode-concurrency 2` automatic on every mlx-lm launch.** mlx-lm 0.31.x supports batching multiple concurrent requests on the same server. No-op when only one request is in flight; real speedup when Ka1zen's auto-title call coincides with the next user message. Zero risk, applied by default.
+- **Favourites section at the top of Settings → Models tab.** Pulls configs where `ModelManagerPrefs.isFavourite(modelID)` is true, sorts alphabetically, and renders them with a `Favourites N` header (same yellow-star + count-pill styling as the chat picker). Hidden when no favourite is set. Configs continue to appear in their family section below — Finder-style shortcut + full hierarchy.
+- **USER_GUIDE section on `sudo sysctl iogpu.wired_limit_mb=N`.** Documents how to raise the macOS wired-memory ceiling for users running 70B+ models or 30B+ models with Fast Mode loaded alongside, where the default forces swap mid-inference. From Apple MLX team guidance.
+
+### Changed
+
+- **KV cache q8 quantization now ON by default.** 0.3.46 introduced KV quant as opt-in OFF; the 2026-05-26 per-model bench matrix (4 models × short/medium/long prompts × multi-run × CJK-leak verified) confirmed kv8 uniform group_size=64 is clean across the board and net positive on 3 of 4 models (Qwen 3.6 27B-mxfp8 +9%, Qwen 3.6 35B-A3B +18%, Gemma 4 26B-A4B neutral, Gemma 4 31B-it −5%). KV quant is a generic optimization that applies to any transformer with a KV cache; 8 bits is conservative enough that we expect similar behaviour on untested model families. Users on Gemma 4 31B-it as primary model can toggle OFF in Settings → Performance. Existing 0.3.46/0.3.47 users who explicitly toggled OFF keep their setting (we read `UserDefaults.standard.object(forKey:)` so explicit-OFF is preserved; only fresh users with no saved preference get the new default).
+- **Per-family recommendation table in Settings → Performance** (collapsible) showing measured kv8 / Fast Mode behaviour per model with one-line guidance — built from the 2026-05-26 bench data so users can match the toggles to their primary model without re-running benches themselves.
+- **KV cache quantization default bumped from 4 bits to 8 bits.** 0.3.46 shipped at `--kv-bits 4`, which measured big TPS gains (+50%+) on MoE targets but was discovered (2026-05-26 bench, Qwen 3.6 35B-A3B, long French prompt × 2 runs) to occasionally leak CJK characters into French output — ~1 Chinese character per ~700 tokens. A quietly-correct number isn't worth a quietly-broken output. Bumped to 8 bits, which a follow-up grid bench across 4 models confirmed produces zero CJK leak across all of them while keeping a real (if smaller) gain on the workload where KV bandwidth actually matters:
+
+    | Target | Baseline | kv-bits 8 | Ratio | Quality |
+    |---|---|---|---|---|
+    | Qwen 3.6 35B-A3B (MoE) | 65.9 t/s | 76.2 t/s | **1.16×** | ✅ Clean |
+    | Qwen 3.6 27B-mxfp8 (dense) | 15.2 t/s | 16.4 t/s | 1.08× | ✅ Clean |
+    | Gemma 4 26B-A4B (MoE) | 69.3 t/s | 69.1 t/s | 1.00× | ✅ Clean |
+    | Gemma 4 31B-it (dense) | 12.4 t/s | 12.4 t/s | 1.00× | ✅ Clean |
+
+  Most of the gain on Qwen 3.6 35B-A3B (primary user daily-driver) is retained while the leak is eliminated. Gemma 4 MoE doesn't benefit much from KV quant at 8 bits — at 4 bits it did, but that came with the unacceptable Qwen leak as a side-effect because we ship one global default. The professionally-correct default is the one that's clean across the board; power users wanting the deeper savings of 4 bits on a Gemma-only setup can pass `--kv-bits 4 --kv-quant-scheme uniform --kv-group-size 64` via the per-model `extraLaunchArgs` field.
+
+### Added (continued)
+
+- **Downloads in progress view** (`DownloadsView.swift`). New toolbar button on Model Manager (capsule with a download counter) that opens a dedicated sheet listing every model currently being pulled — phase label (listing files / downloading / done / failed), live progress bar, percentage. Hidden when nothing is in flight. Replaces the previous flow where users had to scroll through the Browse tab to find which models they had clicked. Auto-closes 800 ms after the last download completes.
+
+### 4-bit variant cross-check
+
+After the 8-bit bench, we also tested the standard 4-bit variants (the common quantization most users download) on the same medium-prompt workload:
+
+| Target | 4-bit baseline | 4-bit + KV q8 | Same model 8-bit baseline | Raw 4-bit vs 8-bit |
+|---|---|---|---|---|
+| Qwen 3.6 27B-mxfp8 vs 27B-4bit | 23.0 t/s | 25.7 t/s | 15.4 t/s | **+49%** |
+| Qwen 3.6 35B-A3B-4bit | 75.9 t/s | 90.1 t/s | 67.2 t/s | +13% |
+| Gemma 4 26B-A4B-4bit | 86.2 t/s | 84.5 t/s | 71.2 t/s | +21% |
+| Gemma 4 31B-it-4bit | 19.0 t/s | 15.6 t/s | 12.6 t/s | +51% |
+
+4-bit gives the biggest raw speedup on dense models (Qwen 27B +49%, Gemma 31B +51%) and a smaller bump on MoE-A3B variants (+13–21%, since MoE is already memory-light per token). KV q8 stacks on top for an extra +12–19% on most configs. The one anomaly — Gemma 4 31B-4bit + KV q8 measuring −18% on N=2 — did not reproduce in the user's own 6-run real Ka1zen sample (22 t/s stable across configs), so it's recorded as bench noise rather than a true regression. The Settings recommendation table reflects this honestly.
+
+### Considered but not shipped (intellectual honesty)
+
+- **`--quantized-kv-start 512`** (would keep first 512 tokens of KV cache in full precision while quantizing the rest). Grid bench across Qwen 27B-mxfp8, Qwen 35B-A3B-8bit, Gemma 26B-A4B-8bit, Gemma 31B-it-8bit with short + long prompts measured -4.1% to +5.4% TPS variance — within noise. Not enough signal to justify a default flag. Power users can still pass it manually via `extraLaunchArgs`.
+
+### Research
+
+Investigation triggered by user request to audit every server flag we weren't using. Methodology: read `mlx_vlm.server --help`, `mlx_lm.server --help`, grep both libraries' Python source for `os.environ.get(...)` calls, check recent merged PRs on the upstream GitHub repos. Found three flags worth shipping (above), one that didn't earn its slot (above), and three more for future iterations (`--max-kv-size N` rotating KV cache memory cap, APC env vars for L2 disk prompt cache, `--pipeline` multi-Mac distributed inference). Also surfaced two upstream PRs landing in mlx-vlm 0.5.1+: native MTP for Qwen 3.6 (PR #1188) and EAGLE3 speculative decoding (PR #1180). Ka1zen will pick those up automatically when the next mlx-vlm release ships.
+
 ## [0.3.46] — 2026-05-25
 
 **Fast Mode is now opt-in (default OFF).** After three iterations on the speculative-decoding feature shipped in 0.3.44, real-world testing revealed that the underlying mlx-vlm 0.5.0 implementation produces **output corruption on long-context workloads (>2K tokens)** — scattered Chinese/Korean characters appearing in French/English responses. This affects both DFlash (Qwen 3.6) and MTP (Gemma 4) drafters, on both dense and Mixture-of-Experts targets. The corruption is subtle on dense + short contexts (clean) and becomes catastrophic on MoE + long contexts (mixed-language semantic noise). Because typical Ka1zen workloads involve web search, tools, and chat history — i.e. always >2K context — the feature cannot be on-by-default without producing unreliable output for the average user. **Fast Mode is now hidden behind a Settings opt-in with an explicit warning dialog.**

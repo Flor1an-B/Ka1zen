@@ -5,7 +5,7 @@
 <h1 align="center">Ka1zen — User Guide</h1>
 
 <p align="center">
-  <strong>Local AI for Apple Silicon</strong> · Version 0.3.46 · by Florian Bertaux
+  <strong>Local AI for Apple Silicon</strong> · Version 0.3.47 · by Florian Bertaux
 </p>
 
 ---
@@ -66,6 +66,22 @@
 > **Python path — important.** Ka1zen expects Python at `/Library/Frameworks/Python.framework/Versions/3.14/`. Only the official **python.org** installer places Python there — Homebrew, pyenv and conda **will not work**.
 
 See the [README](README.md) for step-by-step installation.
+
+### Large models on macOS — wired memory limit
+
+macOS reserves a fixed portion of unified memory as "wired" (non-swappable). When you load a model that approaches your machine's RAM ceiling (typically: 70B+ models, or 30B+ models with Fast Mode draft loaded alongside), the default wired-memory limit forces macOS to start swapping mid-inference, dropping tokens/sec drastically. You can raise the limit with one `sudo sysctl` call:
+
+```bash
+sudo sysctl iogpu.wired_limit_mb=N
+```
+
+Pick `N` larger than the model size in megabytes but smaller than your total physical RAM. Example, M-series Mac with 128 GB total running a 35 GB model:
+
+```bash
+sudo sysctl iogpu.wired_limit_mb=110000   # leaves ~18 GB for the OS / other apps
+```
+
+Reset by setting `N` back to a reasonable default (e.g. `40000` on a 64 GB Mac) or by rebooting (the change is not persistent across boots; add to `/etc/sysctl.conf` if you want it permanent). Symptom that you need this: gen TPS that's much lower than expected for the model size, with `vm_stat | grep swap` showing large swap activity during a chat. From Apple's MLX team guidance.
 
 ---
 
