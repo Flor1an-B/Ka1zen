@@ -3,6 +3,98 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.48] — 2026-05-26
+
+**Full 8-bit performance matrix and a per-quantization picker in the in-app benchmark sheet.** 0.3.47 published the 4-bit bench across 4 models × 4 configs × 3 prompts but the corresponding 8-bit matrix was still missing — users running the 8-bit Qwen 27B-mxfp8 or the 8-bit Gemma 4 31B-it had no measured guidance for the Fast Mode / KV q8 toggles. This release ships the missing 8 variants × 4 configs = 16 cells, plus an unexpected variance lesson surfaced while measuring them.
+
+### Changed
+
+- **In-app benchmark sheet (Settings → Performance → Show latest benchmark results) now has a 4-bit / 8-bit segmented picker.** Switches the visible 4 model cards in place — same layout, no extra scroll. Picks default to 4-bit (matches the per-tier recommendations in `ModelRecommendationCatalog`).
+- **All 0.3.47 in-app benchmark numbers refreshed from the clean 2026-05-26 32-cell rerun.** Per-prompt deltas are small (within ±3% on most cells, up to ±9% on one Gemma 31B-4bit cell) — within run-to-run variance. The published CHANGELOG numbers in 0.3.47 are left as a historical record; the in-app sheet shows the clean numbers users see today.
+- **Updated Gemma 4 31B-it-4bit recommendation:** previous winnerLine said "Fast Mode + KV q8 stacked (+18 to +27%)". The clean rerun shows Fast Mode alone is the actual winner — KV q8 is slightly negative on this dense target and does not stack with MTP. New winnerLine: "Fast Mode (alone) — +18 to +24% across every workload."
+
+### Performance benchmarks (8-bit variants, Ka1zen-equivalent metric)
+
+**Same methodology as 0.3.47's 4-bit matrix** — Apple M5 Max 128 GB, mlx-vlm 0.5.0, three prompts (short code / chat with tools / long code), N=3 runs per cell, decode-only TPS measured client-side, CJK leak detection on every cell.
+
+#### Qwen 3.6 27B-mxfp8 (dense, MX-FP8)
+
+| Workload | Nothing | + KV q8 | + DFlash | + DFlash + KV q8 |
+|---|---|---|---|---|
+| Short code | 16.8 t/s | 18.7 · +11% | **27.5 · +64%** | **28.1 · +67%** |
+| Medium chat with tools | 16.8 t/s | **18.5 · +10%** | 14.6 · −13% | 14.3 · −15% |
+| Long code | 17.0 t/s | 18.0 · +6% | 20.1 · +19% | **23.0 · +35% ⚠️ 1 CJK** |
+
+**Workload-dependent winner.** Fast Mode wins on short and long code (where decoding is purely bandwidth-bound and the drafter parallelism helps) but regresses on the chat-with-tools prompt (where the longer prompt context shifts the bottleneck). For chat-heavy users, KV q8 alone is the safer choice. For code-heavy users, Fast Mode wins on the workloads they care about.
+
+#### Qwen 3.6 35B-A3B-8bit (Mixture-of-Experts)
+
+| Workload | Nothing | + KV q8 | + DFlash | + DFlash + KV q8 |
+|---|---|---|---|---|
+| Short code | 78.4 t/s | **94.9 · +21%** | 42.8 · −45% | 43.2 · −45% |
+| Medium chat with tools | 75.9 t/s | **91.9 · +21%** | 34.0 · −55% | 33.9 · −55% |
+| Long code | 75.2 t/s | **91.2 · +21%** | 37.1 · −51% ⚠️ 2 CJK | 38.1 · −49% ⚠️ 2 CJK |
+
+**Winner: KV q8 — +21% across every workload, output clean.** Identical conclusion to the 4-bit variant: Fast Mode catastrophic on this MoE target (Apple Silicon batch=1 limitation, see 0.3.46 research), CJK leak when speculative decoding is on. Never enable Fast Mode here.
+
+#### Gemma 4 26B-A4B-it-8bit (Mixture-of-Experts)
+
+| Workload | Nothing | + KV q8 | + MTP | + MTP + KV q8 |
+|---|---|---|---|---|
+| Short code | 84.6 t/s | 85.1 · +0% | 84.8 · +0% | 89.8 · +6% |
+| Medium chat with tools | 80.9 t/s | 81.1 · +0% | 83.1 · +3% | 81.2 · +0% |
+| Long code | 79.9 t/s | 80.2 · +0% | **94.7 · +19%** | **96.1 · +20%** |
+
+**Mild Fast Mode win on long code (+19–20%), neutral elsewhere.** Different from the 4-bit variant where Fast Mode was net-negative on short/chat — at 8-bit the model is more memory-bound, so the drafter helps more. KV q8 doesn't stack. Recommendation: enable Fast Mode if long-context coder; otherwise both off.
+
+#### Gemma 4 31B-it-8bit (dense)
+
+| Workload | Nothing | + KV q8 | + MTP | + MTP + KV q8 |
+|---|---|---|---|---|
+| Short code | 14.9 t/s | 14.3 · −4% | **21.4 · +44%** | **21.4 · +44%** |
+| Medium chat with tools | 14.5 t/s | 14.2 · −2% | **21.0 · +45%** | 20.1 · +39% |
+| Long code | 14.0 t/s | 13.8 · −1% | **21.5 · +54%** | 21.3 · +53% |
+
+**Winner: Fast Mode alone — +44 to +54% across every workload, the strongest Fast Mode gain in the entire panel.** KV q8 is slightly negative here and does not stack with MTP (FM+kv8 ≈ FM). The 8-bit baseline is so memory-bound that the MTP drafter has plenty of headroom to work — much more so than at 4-bit (where the same model gets only +18–24% from MTP).
+
+#### Cross-model summary — 8-bit
+
+| Model | Best config | Gain vs baseline |
+|---|---|---|
+| Qwen 3.6 27B-mxfp8 (dense) | Fast Mode (code) / KV q8 (chat) | +64% / +11% |
+| Qwen 3.6 35B-A3B-8bit (MoE) | KV q8 | **+21%** |
+| Gemma 4 26B-A4B-8bit (MoE) | Fast Mode (long code) / Nothing | +19% / — |
+| Gemma 4 31B-it-8bit (dense) | Fast Mode | **+44 to +54%** |
+
+#### Cross-quantization comparison (Fast Mode gain vs baseline)
+
+| Model family | 4-bit FM | 8-bit FM | Why the gap |
+|---|---|---|---|
+| Qwen 3.6 27B dense | 0.92× (regression) | **1.23× (code) / 0.87× (chat)** | 8-bit baseline more memory-bound → drafter has more headroom |
+| Qwen 3.6 35B-A3B MoE | 0.48× ❌ | 0.50× ❌ | MoE is always bad with FM at batch=1 |
+| Gemma 4 26B-A4B MoE | 0.94× | 1.07× (long code) | Same memory-boundness story as Qwen 27B |
+| Gemma 4 31B dense | 1.21× | **1.47×** | Largest 8-bit headroom — strongest gain in the panel |
+
+The two-clear-rules of Ka1zen's Fast Mode story remain:
+1. **MoE → never Fast Mode** (use KV q8 for the +21–27% on Qwen MoE; Gemma MoE is fast enough at baseline).
+2. **Dense → Fast Mode**, with the gain growing as the model gets bigger and the quantization gets less aggressive (8-bit dense > 4-bit dense).
+
+### Methodology lesson learned (single-cell reruns can mislead)
+
+While preparing this matrix, an isolated rerun of one cell (Gemma 4 31B-it-8bit / Fast Mode + KV q8) suggested a 1.73× gain vs baseline. The clean full-panel rerun the same evening, on the same machine with no other load, measured 1.45× on the same cell — a **15% discrepancy between two "clean" runs** of the same configuration.
+
+Hypothesis: the single-cell rerun benefited from a warm OS disk cache (the 31B model and its drafter had just been loaded by an earlier resume). The full-panel rerun reaches the 31B as cell 13 of 16, by which point 3 other models have been loaded and evicted, so the 31B's disk-side weights are cold-cached.
+
+**Implication for future bench methodology:** treat single-cell reruns as exploratory, not as published-grade data. Anything published in CHANGELOG / in-app sheet must come from a full-panel run where every cell sees the same cache pressure. The first version of the 0.3.48 release notes (written from the single-cell rerun) claimed "+73% on Gemma 31B-8bit FM+kv8" and recommended FM+kv8 as the new default — both wrong. Caught by the full-panel rerun before shipping.
+
+### Considered but not shipped
+
+- **Recommending FM+kv8 stacked as a one-click "Performance combo" toggle.** Original idea after the single-cell sentinel. After the full panel correction (FM+kv8 ≈ FM on every model we tested), there's nothing to stack — KV q8 doesn't add on top of Fast Mode on any cell. The two toggles stay independent.
+
+### Research
+
+8-bit matrix run as `bench_4bit_ka1zen_metric.py` with the 8-bit-targeted model registry override (`bench_8bit_ka1zen_metric.py`). Resume helper script (`bench_8bit_resume.py`) added to recover from mid-bench crashes without losing completed cells — atomic per-cell save plus a label-based skip predicate. All scripts kept under `bench/` for repeatability.
+
 ## [0.3.47] — 2026-05-26
 
 **Performance polish across both `mlx_vlm.server` and `mlx_lm.server` launches, plus a UI shortcut.** Researched every flag and env var the two MLX server libraries expose, identified four that Ka1zen wasn't using, and wired them in. Also added a Favourites section at the top of Settings → Models, mirroring the same shortcut pattern the chat model picker has used since 0.3.43.
