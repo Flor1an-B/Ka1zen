@@ -3,7 +3,63 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.45] — 2026-05-25
+## [0.3.46] — 2026-05-25
+
+**Fast Mode is now opt-in (default OFF).** After three iterations on the speculative-decoding feature shipped in 0.3.44, real-world testing revealed that the underlying mlx-vlm 0.5.0 implementation produces **output corruption on long-context workloads (>2K tokens)** — scattered Chinese/Korean characters appearing in French/English responses. This affects both DFlash (Qwen 3.6) and MTP (Gemma 4) drafters, on both dense and Mixture-of-Experts targets. The corruption is subtle on dense + short contexts (clean) and becomes catastrophic on MoE + long contexts (mixed-language semantic noise). Because typical Ka1zen workloads involve web search, tools, and chat history — i.e. always >2K context — the feature cannot be on-by-default without producing unreliable output for the average user. **Fast Mode is now hidden behind a Settings opt-in with an explicit warning dialog.**
+
+### The honest history of the last 4 days
+
+| Version | Status | Lesson |
+|---|---|---|
+| **0.3.44** (2026-05-21) | Shipped Fast Mode ON by default with "Experimental — may give 0-10% on MoE" wording. Bench used short isolated prompts. | Pre-release benches missed the long-context regression that hit every user immediately. |
+| **0.3.45** (2026-05-25, **yanked** same day) | Hotfix attempting `--draft-block-size 2` for DFlash. TPS bench looked great (+28% on MoE long context). | CLI bench measured tokens/second only. Output text was never verified. Real Ka1zen output was corrupted (mixed-language noise). Pushed without user validation — yanked from GitHub releases the same day. |
+| **0.3.46** (2026-05-25, this release) | Pure revert of the 0.3.45 override + **Fast Mode toggle defaults to OFF** + opt-in confirmation dialog with explicit warning. | TPS-only benches are insufficient for spec-dec validation. Output quality must be verified for every config. |
+
+### What is in 0.3.46
+
+1. **`specDecodingEnabled` default flipped to `false`.** First-launch users see Fast Mode as a Settings opt-in, not a default-on feature. Users who explicitly enabled it before keep their setting (Defaults key persists per-user).
+2. **Opt-in confirmation dialog.** Toggling Fast Mode ON from OFF triggers an alert listing what can go wrong: output corruption, net slowdown on MoE, longer cold start. User must click "I understand — enable" deliberately. Toggling OFF→ON→OFF doesn't re-prompt.
+3. **Reverted the 0.3.45 `--draft-block-size 2` override.** mlx-vlm's default block_size (16 for DFlash, 4 for MTP) is restored — these are the values the drafters were trained with; overriding them corrupts output even when TPS goes up.
+4. **CHANGELOG and Settings copy made transparent.** No more "up to 3×" marketing wording. The Settings description now reads: *"Real-world testing in Ka1zen 0.3.46 surfaced output-quality issues on long-context workloads — the underlying mlx-vlm spec-dec implementation is too immature for reliable production use right now."*
+5. **Yanked the buggy v0.3.45 GitHub release.** Latest public release reverts to 0.3.44 then forward to 0.3.46.
+
+### When does Fast Mode actually deliver?
+
+Empirically (Apple Silicon M-series, mlx-vlm 0.5.0, output-verified):
+
+- **Sweet spot — short prompts on dense large targets**: Gemma 4 31B + MTP measured 1.94× on code prompts; Qwen 3.6 27B + DFlash measured 2.77× on similar. Output verified clean.
+- **Acceptable** — short prompts on MoE: ~1× (neutral) to slight gain. Output usually OK at short contexts.
+- **Avoid** — anything > 2K-token input: output corruption risk on every architecture. Confirmed across DFlash (Qwen 3.6 27B dense, 35B-A3B MoE) and MTP (Gemma 4 31B dense, 26B-A4B MoE).
+
+If your use of Ka1zen is primarily code generation in short bursts on a dense target → Fast Mode is worth enabling. If you use web search, long chats, or summary tasks → keep it off.
+
+### Sources (research that informed this decision)
+
+- [Google MTP for Gemma 4](https://blog.google/innovation-and-ai/technology/developers-tools/multi-token-prediction-gemma-4/) — *"the 26B mixture-of-experts model presents unique routing challenges at a batch size of 1 on Apple Silicon, processing multiple requests simultaneously (e.g., batch sizes of 4 to 8) unlocks up to a ~2.2x speedup locally"*
+- [mlx-vlm GitHub issue #1121](https://github.com/Blaizzy/mlx-vlm/issues/1121) — *"Gemma 4 MTP drafter shows negative speedup on Apple Silicon"* — confirms another user hit the same regression
+- [Unsloth Qwen 3.6 docs](https://unsloth.ai/docs/models/qwen3.6.md) — *"Optimal: `--spec-draft-n-max 2` with 83% token acceptance rate. Dense models see ~1.4× speedup; MoE models achieve 1.15-1.25×."* (llama.cpp numbers, the values that inspired the 0.3.45 attempted fix)
+- [z-lab DFlash paper](https://z-lab.ai/projects/dflash/) — describes the block-diffusion architecture trained at block_size 16, explaining why arbitrary block_size overrides corrupt output
+- [vLLM speculative decoding docs](https://docs.vllm.ai/en/latest/features/spec_decode.html) — *"speculative decoding in vLLM is not yet optimized and does not usually yield inter-token latency reductions for all prompt datasets or sampling parameters"* (similar maturity concern in the broader spec-dec ecosystem)
+
+### Process changes committed for the future
+
+- **No CLI bench passes without output text verification.** Tokens/sec alone doesn't catch corruption. Bench fixtures now check the model's actual response is coherent in the requested language.
+- **No GitHub release without user validation.** Local `/Applications` deploy is fine for the user to test. Commit + tag + GitHub release require explicit "OK publie" from the user after testing on their real workflow. This rule is recorded permanently in the project's process memory.
+
+### Fixed
+
+- Output corruption from 0.3.45's `--draft-block-size 2` override (reverted).
+- Fast Mode no longer ships on-by-default to users who hit the long-context corruption immediately.
+
+### Added
+
+- **KV cache q4 quantization (Settings → Performance → "KV cache q4 quantization", default OFF).** When enabled, Ka1zen passes `--kv-bits 4 --kv-quant-scheme uniform --kv-group-size 64` to `mlx_vlm.server`. Measured on Qwen 3.6 35B-A3B-8bit with the same 2K-token French web-search prompt that exposed the Fast Mode regression: **53.7 → 67.8 t/s = +26%** with clean output (verified Chinese-char-free, French word density unchanged). This is the real long-context performance win — independent of speculative decoding, no quality regression observed, no fallback behaviour needed. Default OFF (opt-in) only because we want users to test on their own workflow before relying on it; the bench was promising but not exhaustive across all model families. **Only applied to mlx-vlm servers** — `mlx_lm.server` 0.31.3 doesn't accept these flags.
+
+  Investigation context: this discovery came from analysing a user-shared log of [vMLX](https://github.com/jjang-ai/vmlx) — a competing Apple-Silicon inference server with TurboQuant KV, paged cache, Mamba batching, and hybrid SSM support. vMLX's speed advantage on Qwen 3.6 MoE traces primarily to its KV quantization, not to speculative decoding (their log explicitly shows "Native MTP skipped"). mlx-vlm 0.5.0 already exposes the same KV quantization flags; Ka1zen wasn't passing them. One config flip, real gain.
+
+## [0.3.45] — 2026-05-25 — yanked
+
+Attempted Fast Mode hotfix that introduced output corruption (`--draft-block-size 2` override produced mixed-language token noise on real workloads). Released to GitHub for ~30 minutes without user validation, then deleted from GitHub releases when corruption was identified. Tag deleted from origin. CHANGELOG entry retained as a record of what not to do. Use 0.3.46 or 0.3.44 instead.
 
 **Hotfix Fast Mode** — fixes the catastrophic 0.5× slowdown on tool-augmented and long-context workloads that was masked by our pre-release benchmarks. Single critical change: Ka1zen now passes `--draft-block-size 2` to mlx-vlm when launching with a DFlash drafter, overriding mlx-vlm 0.5.0's default of 16. This matches Unsloth's official Qwen 3.6 documentation recommendation (`--spec-draft-n-max 2`) and transforms the bad case from -43% perf into +28% gain.
 
