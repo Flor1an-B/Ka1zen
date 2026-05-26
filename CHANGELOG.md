@@ -33,65 +33,82 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - **Downloads in progress view** (`DownloadsView.swift`). New toolbar button on Model Manager (capsule with a download counter) that opens a dedicated sheet listing every model currently being pulled — phase label (listing files / downloading / done / failed), live progress bar, percentage. Hidden when nothing is in flight. Replaces the previous flow where users had to scroll through the Browse tab to find which models they had clicked. Auto-closes 800 ms after the last download completes.
 
-### Performance benchmarks — full matrix
+### Performance benchmarks
 
-All numbers measured on Apple Silicon M5 Max (614 GB/s memory bandwidth, 128 GB unified), `mlx-vlm 0.5.0` + Ka1zen 0.3.47, French prompts with `temperature=1.0, top_p=0.95, top_k=20/64` per family. TPS = `completion_tokens / total_elapsed_time` (includes prefill — slightly underestimates Ka1zen's in-app generation TPS which excludes prefill, but ratios between configs are consistent). All output verified clean of CJK character leaks unless explicitly noted.
+**Tested on:** Apple Silicon M5 Max (40-core GPU, 614 GB/s memory bandwidth, 128 GB unified memory), Ka1zen 0.3.47 with `mlx-vlm 0.5.0`. Prompts in French, sampling = each model's official recommendation (temperature 1.0, top_p 0.95, top_k 20 for Qwen / 64 for Gemma). Output verified clean — no character leaks unless flagged with ⚠️.
 
-#### 8-bit variants — multi-run averages per prompt size
+**Three prompt sizes** simulate the Ka1zen workloads users actually run:
+- **Short** — code generation prompt, ~140 tokens output (e.g. "Write a quicksort function").
+- **Medium** — chat with web-search tools active, ~1.7K tokens of context, ~250-400 tokens of French response (representative of daily tool-augmented chat).
+- **Long code** — class implementation + unit tests, ~1.5K tokens of code output.
 
-**Qwen 3.6 27B-mxfp8** (dense)
+**Two optimizations** tested per model:
+- **KV cache q8** — quantizes the attention KV cache to 8 bits. Toggle in Settings → Performance (ON by default since 0.3.47).
+- **Fast Mode** — speculative decoding. Uses **DFlash** drafters on the Qwen family, **MTP** drafters on the Gemma family. Toggle in Settings → Performance (opt-in OFF).
 
-| Prompt | baseline | kv4_g32 | kv8 | Fast Mode |
+#### Qwen 3.6 27B-mxfp8 (dense)
+
+| Workload | Nothing | + KV cache q8 | + DFlash (Fast Mode) |
+|---|---|---|---|
+| Short code | 16.7 t/s | 18.4 t/s | **31.6 t/s · +89%** |
+| Medium chat with tools | 15.4 t/s | **16.5 t/s · +7%** | 11.6 t/s · −25% |
+| Long code | 17.0 t/s | 18.7 t/s | **30.9 t/s · +82%** |
+
+**Winner:** DFlash for code workloads, KV cache q8 for tool-augmented chat. Both options keep output clean.
+
+#### Qwen 3.6 35B-A3B-8bit (Mixture-of-Experts, primary daily-driver)
+
+| Workload | Nothing | + KV cache q8 | + DFlash (Fast Mode) |
+|---|---|---|---|
+| Short code | 70.9 t/s | **83.6 t/s · +18%** | 47.7 t/s · −33% |
+| Medium chat with tools | 67.2 t/s | **79.4 t/s · +18%** | 29.6 t/s · −56% ⚠️ CJK leak |
+| Long code | 74.4 t/s | **88.8 t/s · +19%** | 48.0 t/s · −35% |
+
+**Winner: KV cache q8 across the board (+18–19%).** DFlash regresses on every workload and leaks CJK characters on tool-augmented chat — don't enable Fast Mode on this model.
+
+#### Gemma 4 26B-A4B-it-8bit (Mixture-of-Experts)
+
+| Workload | Nothing | + KV cache q8 | + MTP (Fast Mode) |
+|---|---|---|---|
+| Short code | 82.4 t/s | 82.4 t/s | **95.0 t/s · +15%** |
+| Medium chat with tools | 71.2 t/s | 68.9 t/s · −3% | 49.2 t/s · −31% |
+| Long code | 81.2 t/s | 84.8 t/s | **110.9 t/s · +37%** |
+
+**Winner:** MTP for code, nothing for tool-augmented chat (KV cache q8 is slightly negative, MTP catastrophic). Output clean throughout.
+
+#### Gemma 4 31B-it-8bit (dense)
+
+| Workload | Nothing | + KV cache q8 | + MTP (Fast Mode) |
+|---|---|---|---|
+| Short code | 15.2 t/s | 14.6 t/s | **26.5 t/s · +74%** |
+| Medium chat with tools | 12.6 t/s | 11.7 t/s · −7% | **13.6 t/s · +8%** |
+| Long code | 14.9 t/s | 14.4 t/s | **21.3 t/s · +43%** |
+
+**Winner: MTP everywhere (+8% to +74%).** KV cache q8 is slightly negative on this model — disable it if Gemma 4 31B-it is your primary.
+
+#### "Should I use the 4-bit version instead?" — yes, in most cases
+
+Most users on HuggingFace download the standard 4-bit variants rather than 8-bit. We re-ran the medium-chat-with-tools workload on the 4-bit equivalents of each model:
+
+| Model | 8-bit baseline | 4-bit baseline | Speedup from 4-bit | 4-bit + KV q8 |
 |---|---|---|---|---|
-| short (~140 out) | 16.7 t/s | — | 18.4 t/s | **31.6 t/s** (+89%) |
-| medium (1700 in / ~250 out) | 15.4 t/s | 16.1 t/s | **16.5 t/s** (+7%) | 11.6 t/s (-25%) |
-| code_long (~1300 out) | 17.0 t/s | — | 18.7 t/s | **30.9 t/s** (+82%) |
+| Qwen 3.6 27B (dense) | 15.4 t/s | 23.0 t/s | **+49%** | 25.7 t/s |
+| Qwen 3.6 35B-A3B (MoE) | 67.2 t/s | 75.9 t/s | +13% | **90.1 t/s** |
+| Gemma 4 26B-A4B (MoE) | 71.2 t/s | 86.2 t/s | +21% | 84.5 t/s |
+| Gemma 4 31B (dense) | 12.6 t/s | 19.0 t/s | **+51%** | 15.6 t/s |
 
-**Qwen 3.6 35B-A3B-8bit** (MoE, primary daily-driver)
+**Takeaway:** 4-bit gives the largest single speedup on dense models (Qwen 27B +49%, Gemma 31B +51%). On MoE models the boost is smaller (+13–21%) because Mixture-of-Experts is already memory-light per token. KV cache q8 stacks on top for an extra +12–19% on the Qwen family; it's neutral-to-negative on Gemma 4-bit.
 
-| Prompt | baseline | kv4_g32 | kv8 | Fast Mode |
-|---|---|---|---|---|
-| short | 70.9 t/s | — | **83.6 t/s** (+18%) | 47.7 t/s (-33%) |
-| medium | 67.2 t/s | 78.9 t/s ⚠️ 3 CJK chars | **79.4 t/s** (+18%) | 29.6 t/s ⚠️ 2 CJK (-56%) |
-| code_long | 74.4 t/s | — | **88.8 t/s** (+19%) | 48.0 t/s (-35%) |
+#### Real-world runs (Ka1zen in-app stats)
 
-**Gemma 4 26B-A4B-it-8bit** (MoE)
+Numbers users see in their own chats — these come from Ka1zen's UI `generation_tps` indicator, not the synthetic bench:
 
-| Prompt | baseline | kv4_g32 | kv8 | Fast Mode |
-|---|---|---|---|---|
-| short | 82.4 t/s | — | 82.4 t/s (0%) | **95.0 t/s** (+15%) |
-| medium | 71.2 t/s | 67.5 t/s (-5%) | 68.9 t/s (-3%) | 49.2 t/s (-31%) |
-| code_long | 81.2 t/s | — | 84.8 t/s (+4%) | **110.9 t/s** (+37%) |
+- **Qwen 3.6 35B-A3B-4bit + KV cache q8:** 98.6 t/s on a 1507-token output (4469-token input)
+- **Gemma 4 31B-it-4bit + KV cache q8** across 6 real chats:
+  - With web-search tools (~5–7K input): **22.2 t/s avg** (24.0 / 23.4 / 19.1)
+  - Without tools (~0.4–4K input): **23.2 t/s avg** (24.3 / 21.6 / 23.8)
 
-**Gemma 4 31B-it-8bit** (dense)
-
-| Prompt | baseline | kv4_g32 | kv8 | Fast Mode |
-|---|---|---|---|---|
-| short | 15.2 t/s | — | 14.6 t/s (-4%) | **26.5 t/s** (+74%) |
-| medium | 12.6 t/s | 11.7 t/s (-7%) | 11.7 t/s (-7%) | **13.6 t/s** (+8%) |
-| code_long | 14.9 t/s | — | 14.4 t/s (-3%) | **21.3 t/s** (+43%) |
-
-#### 4-bit variant cross-check
-
-After the 8-bit bench, we also tested the standard 4-bit variants (the common quantization most users download) on the same medium-prompt workload:
-
-| Target | 4-bit baseline | 4-bit + KV q8 | Same model 8-bit baseline | Raw 4-bit vs 8-bit |
-|---|---|---|---|---|
-| Qwen 3.6 27B-mxfp8 vs 27B-4bit | 23.0 t/s | 25.7 t/s | 15.4 t/s | **+49%** |
-| Qwen 3.6 35B-A3B-4bit | 75.9 t/s | 90.1 t/s | 67.2 t/s | +13% |
-| Gemma 4 26B-A4B-4bit | 86.2 t/s | 84.5 t/s | 71.2 t/s | +21% |
-| Gemma 4 31B-it-4bit | 19.0 t/s | 15.6 t/s | 12.6 t/s | +51% |
-
-4-bit gives the biggest raw speedup on dense models (Qwen 27B +49%, Gemma 31B +51%) and a smaller bump on MoE-A3B variants (+13–21%, since MoE is already memory-light per token). KV q8 stacks on top for an extra +12–19% on most configs. The one anomaly — Gemma 4 31B-4bit + KV q8 measuring −18% on N=2 — did not reproduce in the user's own 6-run real Ka1zen sample (22 t/s stable across configs), so it's recorded as bench noise rather than a true regression. The Settings recommendation table reflects this honestly.
-
-#### User-validated real-world runs (Ka1zen 0.3.47, generation_tps from in-app stats)
-
-- **Qwen 3.6 35B-A3B-4bit + KV q8**: 98.6 t/s on a 1507-token output (4469-token input).
-- **Gemma 4 31B-it-4bit (KV q8 default)** across 6 chats:
-  - With tools active (~5–7K token input): 24.0 / 23.4 / 19.1 t/s (avg 22.2)
-  - Without tools (~0.4–4K token input): 24.3 / 21.6 / 23.8 t/s (avg 23.2)
-
-These are higher than the synthetic bench because Ka1zen reports `completion_tokens / decode_time` (excludes prefill), while the synthetic bench above reports `completion_tokens / total_request_time`. The ratios between configs hold; the absolute numbers in Ka1zen's UI are the real "tokens per second of generation" you experience.
+The in-app numbers run higher than the synthetic bench because Ka1zen measures `decode_time` only (excludes the prefill phase where the model reads your prompt). The bench tables above include prefill — useful for comparing configs, but Ka1zen's UI is what you actually feel.
 
 ### Considered but not shipped (intellectual honesty)
 
