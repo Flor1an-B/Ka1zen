@@ -3,6 +3,19 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.49] — 2026-06-02
+
+**Prompt optimizer reliability and language fixes, plus an on-demand optimizer server.** Three issues with the prompt optimizer (the ✨ rewrite button next to the chat input) are addressed: it failed silently when a dedicated optimizer model was selected but its server wasn't running, it returned English rewrites for non-English prompts on large multilingual chat models, and the dedicated optimizer model had no way to start on its own.
+
+### Fixed
+
+- **Prompt optimizer no longer fails silently when the selected optimizer model isn't running.** When Settings → General → Prompt Optimizer pointed at a specific small model whose server was stopped, clicking ✨ did nothing — the optimizer path doesn't auto-launch a server the way chat send does, and the failure surfaced no feedback. It now falls back to the active chat model (whose server is live) so optimization always runs. The six background consumers of the same path (auto-title, context compression, image-prompt optimization) inherit the same safe fallback.
+- **Prompt optimizer keeps the input language.** On large multilingual chat models (e.g. Gemma 4 31B) a French prompt was often rewritten in English — especially technical or code prompts with the Technical/Concise styles. The optimizer now detects the input language (Apple's `NLLanguageRecognizer`) and names it explicitly to the model ("write entirely in French, even for code"), which holds the rewrite in the original language. Verified on Gemma 4 31B (English leaks 2/4 → 0/4) and Qwen 3.6 35B. Image-generation and image-edit prompt optimization continue to force English on purpose (better diffusion-model comprehension) — those are unaffected.
+
+### Added
+
+- **On-demand optimizer server.** A model designated as the prompt optimizer now launches on its own dedicated port (8090) the moment you click ✨, and is stopped again as soon as the rewrite completes — it never stays resident, so it costs no memory when you aren't optimizing. It runs alongside the main chat model without evicting it (launched directly through `ModelLauncher`, not the same-type-sibling-stopping path), and falls back to the active chat model if it can't start. Trade-off: each click reloads the small model (~3 s for a 4 GB 8-bit model) — a deliberate memory-first choice over keeping it warm.
+
 ## [0.3.48] — 2026-05-26
 
 **Full 8-bit performance matrix and a per-quantization picker in the in-app benchmark sheet.** 0.3.47 published the 4-bit bench across 4 models × 4 configs × 3 prompts but the corresponding 8-bit matrix was still missing — users running the 8-bit Qwen 27B-mxfp8 or the 8-bit Gemma 4 31B-it had no measured guidance for the Fast Mode / KV q8 toggles. This release ships the missing 8 variants × 4 configs = 16 cells, plus an unexpected variance lesson surfaced while measuring them.
