@@ -49,7 +49,9 @@ Ka1zen is a native macOS app that runs open large-language models **locally** on
 | | |
 |---|---|
 | 💬 **Local chat** | Qwen, Gemma, DeepSeek, Mistral, Llama — anything on [mlx-community](https://huggingface.co/mlx-community) |
-| 🖼 **Vision** | Drop images into the chat — Gemma 4, Pixtral, Mistral Small VLM, Qwen2-VL, LLaVA |
+| ⚙️ **Two engines** | **MLX** (primary, fastest on Apple Silicon) **+ GGUF via llama.cpp** — the day-one bridge for models too new for MLX. Browse GGUF from [ggml-org](https://huggingface.co/ggml-org), [unsloth](https://huggingface.co/unsloth), [bartowski](https://huggingface.co/bartowski); pick a quant, Ka1zen runs `llama-server` directly (no Ollama / LM Studio). GGUF chat is at parity: text, vision, tools, thinking, logprobs, Fast Mode |
+| 🖼 **Vision** | Drop images into the chat — Gemma 4, Pixtral, Mistral Small VLM, Qwen2-VL, LLaVA (MLX) · Qwen 3.6 & Gemma 4 (GGUF, via `mmproj`) |
+| ⚡ **Fast Mode** | Speculative decoding (MTP) with byte-identical output, on **both engines** and on **dense AND Mixture-of-Experts** — Qwen 3.6 35B-A3B → **145 t/s** (MLX 4-bit), Gemma 4 26B-A4B, plus dense Qwen 27B / Gemma 31B. MoE needs mlx-vlm ≥ 0.6.3 (auto-gated). **Gemma QAT** 4-bit builds run faster still. One click — **Download with Fast Mode** — grabs the whole bundle (model + draft) in a single step |
 | 🎙 **Audio** | Speak to the model, it answers (Gemma 4) |
 | 🧠 **Thinking mode** | Watch the model reason before answering (Qwen3, DeepSeek-R1, Gemma 3/4…) |
 | 🌐 **Web search** | Brave Search (primary) with DuckDuckGo as fallback + page fetch, clickable `[1]`-style citations and date-aware queries |
@@ -128,7 +130,9 @@ cd ~/Downloads/Ka1zen-main   # or wherever you unzipped/cloned it
 ./install.sh
 ```
 
-The script installs `mlx-lm`, `mlx-vlm`, `huggingface-hub` and `mflux` into your Python 3.14.
+The script installs `mlx-lm`, `mlx-vlm`, `huggingface-hub` and `mflux` into your Python 3.14, and installs **llama.cpp** (the GGUF backend) via Homebrew.
+
+> **GGUF backend (optional).** GGUF models run through llama.cpp's `llama-server`. `install.sh` runs `brew install llama.cpp` for you. If you don't have [Homebrew](https://brew.sh), you can skip it — Ka1zen runs MLX models without llama.cpp and only prompts you to install it the first time you try to load a GGUF model. You can also install/upgrade it later from **Settings → Runtime Health**.
 
 <details>
 <summary>Manual install (if you prefer)</summary>
@@ -136,6 +140,9 @@ The script installs `mlx-lm`, `mlx-vlm`, `huggingface-hub` and `mflux` into your
 ```bash
 /Library/Frameworks/Python.framework/Versions/3.14/bin/pip3 install \
   mlx-lm mlx-vlm huggingface-hub hf_transfer mflux
+
+# GGUF backend (optional):
+brew install llama.cpp
 ```
 
 </details>

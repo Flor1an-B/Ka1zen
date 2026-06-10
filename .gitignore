@@ -29,6 +29,10 @@ Ka1zen.app/
 .env.local
 .claude/
 
+# Internal working data — not for the public docs repo
+bench/
+tasks/
+
 # Editor
 .vscode/
 .idea/

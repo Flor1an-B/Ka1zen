@@ -62,8 +62,17 @@
 | **mlx-vlm** | Vision / audio server | Recommended |
 | **huggingface-hub** | Model downloads | Yes |
 | **mflux** | Image generation (FLUX.2) | Optional |
+| **llama.cpp** (`brew install llama.cpp`) | GGUF model server (day-one models too new for MLX) | Optional |
 
 > **Python path — important.** Ka1zen expects Python at `/Library/Frameworks/Python.framework/Versions/3.14/`. Only the official **python.org** installer places Python there — Homebrew, pyenv and conda **will not work**.
+>
+> **GGUF models** are served by **llama.cpp** (`llama-server`), installed via Homebrew. `./install.sh` sets it up automatically; otherwise run `brew install llama.cpp`. MLX is faster on Apple Silicon, so Ka1zen prefers MLX when available and uses GGUF as the day-one bridge for brand-new architectures. The **Runtime Health** panel (System Models → Prerequisites) shows whether llama.cpp is present, and **Update prerequisites / Restore validated versions** install or upgrade it for you (non-fatal — skipped if you have no Homebrew).
+>
+> GGUF chat is at **parity with MLX**: text, **vision** (repos shipping an `mmproj` projector — Qwen 3.6, Gemma 4), **tool-calling**, thinking, logprobs, and **Fast Mode** (MTP). Installed models are grouped into **MLX** and **GGUF · llama.cpp** sections in the Model Manager and picker. Browse GGUF from **ggml-org**, **unsloth**, and **bartowski**; picking a `…-GGUF` repo opens a quant picker (Q4_K_M recommended — Ka1zen downloads only that file, plus its MTP draft and vision projector). The context window scales with your RAM up to **128K** (≥64 GB). Some Gemma 4 12B "unified" vision needs llama.cpp **≥ b9518**; older builds run that model text-only.
+>
+> **Fast Mode in one click.** When a model supports speculative decoding, the download dialog offers **"Download with Fast Mode"** — it pulls the whole bundle in a single step (the recommended quant **plus** its MTP head and projector), so Fast Mode is active on first launch with nothing else to do. For Qwen 3.6 the MTP is embedded in the weights (`…-MTP-GGUF`, self-speculative); for Gemma 4 it's a companion head that downloads alongside the model. Verified Q4 throughput on the M5 Max: Qwen 3.6 35B-A3B (MoE) **112 t/s**, Gemma 4 26B-A4B (MoE) **113 t/s** — both with Fast Mode active. **Gemma 4 QAT builds** (quantization-aware-trained 4-bit) are fully supported on **both engines** — GGUF (`unsloth/gemma-4-*-qat-GGUF`, ≈ **137 t/s** on 26B-A4B) and MLX (`mlx-community/gemma-4-*-qat-*`, Fast Mode via the same draft heads) — at no quality cost vs standard 4-bit. On GGUF, selecting one downloads its Fast Mode head automatically.
+>
+> **DiffusionGemma** — Google's block-diffusion LM (`mlx-community/diffusiongemma-26B-A4B-it-*`), which generates by parallel denoising instead of token-by-token — runs in-app via the **MLX** backend (mlx-vlm 0.6.3). The **GGUF** build of the same model can't run here: `llama-server` has no diffusion path (it needs a separate diffusion CLI). So for DiffusionGemma, pick the **MLX** version.
 
 See the [README](README.md) for step-by-step installation.
 
@@ -162,9 +171,9 @@ The sidebar groups conversations into date buckets — **Today · Yesterday · L
 - **Drag and drop** into the chat, or
 - Click the **paperclip/image** icon in the input bar.
 
-Supported formats: PNG, JPEG, HEIC, WebP, GIF. Compatible models: Gemma 3/4, LLaVA, Pixtral, Mistral Small VLM, Qwen2-VL…
+Supported formats: PNG, JPEG, HEIC, WebP, GIF. Compatible models: Gemma 3/4, LLaVA, Pixtral, Mistral Small VLM, Qwen2-VL… (MLX), and **GGUF** models that ship an `mmproj` projector — Qwen 3.6, Gemma 4 26B/31B (and 12B on llama.cpp ≥ b9518).
 
-> The image button only appears when the active model supports vision.
+> The image button only appears when the active model supports vision. For GGUF this is detected from the projector actually on disk, so multimodal models whose name gives no `-vl` hint (like Qwen 3.6) are recognized correctly.
 
 ### Text / PDF documents (one-shot)
 
@@ -542,7 +551,7 @@ If you send a message to a conversation whose model isn't running, Ka1zen tries 
 
 ### Fast Mode (Experimental) — Speculative decoding
 
-Ka1zen 0.3.44 introduces **Fast Mode**, an experimental integration of MTP (Google's Gemma 4 drafters) and DFlash (z-lab's Qwen 3.5/3.6, MiniMax, Kimi drafters) speculative decoding via mlx-vlm 0.5.0. Pair a small companion model with a chat target to make generation faster while keeping output quality mathematically identical.
+**Fast Mode** is Ka1zen's integration of **MTP speculative decoding** (via mlx-vlm 0.6.3, and llama.cpp for GGUF). A small companion "draft" head predicts several tokens that the full model verifies in one pass — faster generation, **mathematically identical output**. It works on **Qwen 3.6 and Gemma 4**, **dense and Mixture-of-Experts** (the MoE path was unblocked by mlx-vlm 0.6.3's #1317 fix — Ka1zen requires ≥ 0.6.3 for MoE Fast Mode and keeps it disabled on older runtimes).
 
 #### How to enable
 
@@ -559,18 +568,21 @@ Real-world gains depend on three factors that vary widely across conversations:
 
 | Factor | Effect |
 |---|---|
-| **Target architecture** | Dense large models (Gemma 4 31B, Qwen 3.6 27B) gain 1.5–3×. MoE small-active models (Gemma 4 26B-A4B, Qwen 3.6 35B-A3B) gain ~0× on Apple Silicon single-user — Google [documents this](https://blog.google/innovation-and-ai/technology/developers-tools/multi-token-prediction-gemma-4/) as a routing-overhead limitation that only batched inference (4–8 concurrent requests) overcomes. |
+| **Target architecture** | Dense large models (Gemma 4 31B, Qwen 3.6 27B) gain the most. **MoE models (Qwen 3.6 35B-A3B, Gemma 4 26B-A4B) are supported on mlx-vlm ≥ 0.6.3** and reach high absolute throughput (35B-A3B up to ~145 t/s at 4-bit) — earlier mlx-vlm builds corrupted MoE + MTP output, so Ka1zen version-gates this. |
 | **Context length** | At < 2 K tokens of prompt, gains are at their peak. Beyond 2 K, the companion's prediction accuracy drops sharply (accept rate degrades from ~6 to ~1.5). |
 | **Output entropy** | Predictable patterns (code, structured math, reasoning chains) accept well. High-entropy content (multi-thread news summaries with proper nouns and dates) can drop accept rate so low that the draft overhead exceeds the savings — Ka1zen surfaces this with a **red** indicator + warning tooltip in the chat footer. |
 
-#### Measured benchmarks (Apple Silicon M-series, mlx-vlm 0.5.0)
+#### Measured throughput (Apple Silicon M5 Max, mlx-vlm 0.6.3, Fast Mode on)
 
-| Target | Family | Prompt | Real-world gain |
+| Target | Type | Quant | t/s |
 |---|---|---|---|
-| Gemma 4 31B-it-8bit (dense) | MTP | code, short | **1.94×** |
-| Qwen 3.6 27B-mxfp8 (dense) | DFlash | code, short | **2.77×** |
-| Qwen 3.6 27B-mxfp8 (dense) | DFlash | code, 3.8 K input | ≈ 1.2× |
-| Qwen 3.6 35B-A3B (MoE) | DFlash | code, short | 0.98× (neutral) |
+| Qwen 3.6 35B-A3B | MoE | 4-bit | **145** |
+| Qwen 3.6 35B-A3B | MoE | 8-bit | 109 |
+| Qwen 3.6 27B | dense | 4-bit | 105–127 |
+| Gemma 4 31B | dense | 4-bit | up to 125 |
+| Gemma 4 26B-A4B | MoE | 4-bit | 90 |
+
+All verified with clean output (the server console shows the draft head loaded + `speculative decoding enabled`). GGUF Fast Mode reaches comparable numbers via llama.cpp.
 
 #### Where Fast Mode drafts live
 
@@ -587,8 +599,8 @@ Companion models (gemma-4-*-assistant, *-DFlash) auto-register as installed mode
 #### Known limitations
 
 - **Cold start** of the first chat after launch can take 30–90 s longer than usual (target + drafter to load + Metal JIT compilation). A timeout the first time is normal; subsequent requests are fast.
-- **No adaptive disable**: when a single request shows catastrophic acceptance, mlx-vlm 0.5.0 doesn't fall back to non-speculative generation. Ka1zen's indicator informs you (red triangle + tooltip) but doesn't auto-toggle. Disable in Settings if your typical workload doesn't benefit.
-- **mlx-vlm 0.5.0 sampling bug** with DFlash + `top_p < 1.0` is auto-handled — Ka1zen silently sends `top_p = 1.0` for these requests only. The workaround disengages automatically the moment upstream patches the issue.
+- **No adaptive disable**: when a single request shows low draft acceptance, the server doesn't fall back to plain decoding. Ka1zen's footer indicator informs you (red triangle + tooltip) but doesn't auto-toggle — disable Fast Mode in Settings if your typical workload doesn't benefit.
+- **MoE needs mlx-vlm ≥ 0.6.3.** On an older runtime Ka1zen keeps MoE Fast Mode off (the pre-0.6.3 MoE+MTP path corrupted output). Update via Settings → Runtime Health → *Update prerequisites*, then relaunch Ka1zen.
 
 ---
 
