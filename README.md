@@ -103,7 +103,7 @@ Ka1zen is a native macOS app that runs open large-language models **locally** on
 
 ## Installation
 
-Ka1zen has five steps. Plan for **15–20 minutes** the first time (Python install + first model download).
+Ka1zen has five steps. Setup is mostly downloads — the Python packages and the llama.cpp backend take **a few minutes, depending on your internet connection**. After that you pick a model and it downloads in the background (size-dependent).
 
 ### 1. Check compatibility
 
@@ -130,18 +130,19 @@ cd ~/Downloads/Ka1zen-main   # or wherever you unzipped/cloned it
 ./install.sh
 ```
 
-The script installs `mlx-lm`, `mlx-vlm`, `huggingface-hub` and `mflux` into your Python 3.14, and installs **llama.cpp** (the GGUF backend) via Homebrew.
+The script installs `mlx-lm`, `mlx-vlm`, `huggingface-hub`, `hf-transfer` and `mflux` into your Python 3.14 — all at the exact versions Ka1zen is tested against — and downloads a pinned **llama.cpp** build (the GGUF backend).
 
-> **GGUF backend (optional).** GGUF models run through llama.cpp's `llama-server`. `install.sh` runs `brew install llama.cpp` for you. If you don't have [Homebrew](https://brew.sh), you can skip it — Ka1zen runs MLX models without llama.cpp and only prompts you to install it the first time you try to load a GGUF model. You can also install/upgrade it later from **Settings → Runtime Health**.
+> **GGUF backend.** GGUF models run through llama.cpp's `llama-server`. `install.sh` downloads a pinned, self-contained build into `~/Library/Application Support/Ka1zen/llama/` — **no Homebrew required** (it only falls back to `brew install llama.cpp` if that download fails). You can also install or upgrade it later from **Settings → Runtime Health**. MLX models run without it; you're only prompted for llama.cpp the first time you load a GGUF model.
 
 <details>
 <summary>Manual install (if you prefer)</summary>
 
 ```bash
+# Pinned to the versions Ka1zen is tested against:
 /Library/Frameworks/Python.framework/Versions/3.14/bin/pip3 install \
-  mlx-lm mlx-vlm huggingface-hub hf_transfer mflux
+  mlx-lm==0.31.3 mlx-vlm==0.6.3 huggingface-hub==1.17.0 hf_transfer==0.1.9 mflux
 
-# GGUF backend (optional):
+# GGUF backend (optional) — simplest manual option; install.sh pins an exact build:
 brew install llama.cpp
 ```
 
