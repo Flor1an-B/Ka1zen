@@ -3,6 +3,14 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-06-11
+
+**Fix: web search no longer hijacks creative or general requests.** With web search on, the model was instructed to answer *exclusively* from the search results. That's right for a factual lookup, but it made the model refuse anything the results didn't cover — ask it to "write me a story" and it would decline because "the sources contain no narrative material." The search instructions are now **grounding guidelines**: factual claims (dates, numbers, names, recent events) are still grounded in the results and cited, while writing, reasoning, brainstorming and open-ended requests are answered normally using the model's own ability. It never refuses or waters down a task just because the results don't cover it.
+
+### Fixed
+
+- **Web search refused creative and general tasks.** The search system prompt's "base your answer EXCLUSIVELY on the web results" rule turned the model into a strict source-summarizer, so it declined stories, explanations and open-ended help whenever the results didn't contain them. Rewritten so search grounds facts without restricting the model's own capabilities — verified: web search + "write a story" now writes the story instead of refusing.
+
 ## [0.4.0] — 2026-06-10
 
 **A second inference engine (GGUF via llama.cpp), Fast Mode across the board — including Mixture-of-Experts — and Google's DiffusionGemma.** Three headline additions. First, Ka1zen — historically MLX-only — gains **llama.cpp** (`llama-server`) as a second backend, so GGUF models run natively in-app: the day-one bridge for architectures too new for mlx-lm/mlx-vlm, without bolting on Ollama or LM Studio. GGUF chat reaches **functional parity with MLX** (text, vision, tool-calling, thinking, logprobs, Fast Mode). Second, **Fast Mode (speculative decoding) now runs on both engines AND on MoE models** — Qwen 3.6 35B-A3B and Gemma 4 26B-A4B, previously impossible on Apple Silicon at batch=1, now reach up to **145 t/s** with byte-identical output. Third, **Google's DiffusionGemma** (a block-diffusion LM) runs in-app via the MLX backend. Plus first-class support for **Gemma 4 QAT** (quantization-aware-trained) builds on both engines — same 4-bit footprint, better quality, faster.
