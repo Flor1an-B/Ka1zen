@@ -103,7 +103,7 @@ done
 # `brew upgrade` can't change the version Ka1zen runs. The release tarball is
 # self-contained (dylibs via @loader_path). Falls back to Homebrew if the
 # download fails.
-LLAMA_BUILD="b9585"
+LLAMA_BUILD="b9859"
 LLAMA_DEST="$HOME/Library/Application Support/Ka1zen/llama"
 LLAMA_URL="https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_BUILD}/llama-${LLAMA_BUILD}-bin-macos-arm64.tar.gz"
 info "Installing llama.cpp ${LLAMA_BUILD} (GGUF backend, pinned)"
