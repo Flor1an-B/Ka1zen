@@ -72,7 +72,7 @@
 >
 > **Fast Mode in one click.** When a model supports speculative decoding, the download dialog offers **"Download with Fast Mode"** — it pulls the whole bundle in a single step (the recommended quant **plus** its MTP head and projector), so Fast Mode is active on first launch with nothing else to do. For Qwen 3.6 the MTP is embedded in the weights (`…-MTP-GGUF`, self-speculative); for Gemma 4 it's a companion head that downloads alongside the model. Verified Q4 throughput on the M5 Max: Qwen 3.6 35B-A3B (MoE) **112 t/s**, Gemma 4 26B-A4B (MoE) **113 t/s** — both with Fast Mode active. **Gemma 4 QAT builds** (quantization-aware-trained 4-bit) are fully supported on **both engines** — GGUF (`unsloth/gemma-4-*-qat-GGUF`, ≈ **137 t/s** on 26B-A4B) and MLX (`mlx-community/gemma-4-*-qat-*`, Fast Mode via the same draft heads) — at no quality cost vs standard 4-bit. On GGUF, selecting one downloads its Fast Mode head automatically.
 >
-> **DiffusionGemma** — Google's block-diffusion LM (`mlx-community/diffusiongemma-26B-A4B-it-*`), which generates by parallel denoising instead of token-by-token — runs in-app via the **MLX** backend (mlx-vlm 0.6.3). The **GGUF** build of the same model can't run here: `llama-server` has no diffusion path (it needs a separate diffusion CLI). So for DiffusionGemma, pick the **MLX** version.
+> **DiffusionGemma** — Google's block-diffusion LM (`mlx-community/diffusiongemma-26B-A4B-it-*`), which generates by parallel denoising instead of token-by-token — runs in-app via the **MLX** backend (mlx-vlm 0.6.5). The **GGUF** build of the same model can't run here: `llama-server` has no diffusion path (it needs a separate diffusion CLI). So for DiffusionGemma, pick the **MLX** version.
 
 See the [README](README.md) for step-by-step installation.
 
@@ -551,7 +551,7 @@ If you send a message to a conversation whose model isn't running, Ka1zen tries 
 
 ### Fast Mode (Experimental) — Speculative decoding
 
-**Fast Mode** is Ka1zen's integration of **MTP speculative decoding** (via mlx-vlm 0.6.3, and llama.cpp for GGUF). A small companion "draft" head predicts several tokens that the full model verifies in one pass — faster generation, **mathematically identical output**. It works on **Qwen 3.6 and Gemma 4**, **dense and Mixture-of-Experts** (the MoE path was unblocked by mlx-vlm 0.6.3's #1317 fix — Ka1zen requires ≥ 0.6.3 for MoE Fast Mode and keeps it disabled on older runtimes).
+**Fast Mode** is Ka1zen's integration of **MTP speculative decoding** (via mlx-vlm 0.6.5, and llama.cpp for GGUF). A small companion "draft" head predicts several tokens that the full model verifies in one pass — faster generation, **mathematically identical output**. It works on **Qwen 3.6 and Gemma 4**, **dense and Mixture-of-Experts** (the MoE path was unblocked by mlx-vlm 0.6.3's #1317 fix — Ka1zen requires ≥ 0.6.3 for MoE Fast Mode and keeps it disabled on older runtimes).
 
 #### How to enable
 

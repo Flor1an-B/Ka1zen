@@ -70,17 +70,20 @@ info "Upgrading pip"
 "$PIP" install --upgrade pip >/dev/null
 
 # --- 3. Install packages (PINNED to validated versions) ---
-# We pin exact versions instead of `--upgrade`. mlx-vlm is pinned to 0.6.3, which
-# enables MLX MTP / Fast Mode on Qwen 3.6 + Gemma 4 — including MoE targets:
-# 0.6.3 fixes the #1317 MoE+MTP corruption (35B-A3B / 26B-A4B degenerated into a
-# Chinese loop on ≤0.6.2) and the #1313 KV-q8 prompt-context bug (validated
-# 2026-06-10). Ka1zen version-gates MoE Fast Mode on mlx-vlm ≥ 0.6.3
-# (SpeculativeDecoding.moeMTPSupported) so an older install stays safe. 0.6.0 is
-# denylisted (KV bug + a Gemma Fast Mode crash). The in-app "Runtime Health"
-# panel tracks the same validated set. mflux is left unpinned.
+# We pin exact versions instead of `--upgrade`. mlx-vlm is pinned to 0.6.5
+# (validated 2026-07-17). It fixes the 0.6.4 regression that broke qwen3_5
+# inference (Qwen 3.6 dense 27B + MoE 35B-A3B → random-unicode garbage; #1521,
+# from an unconditional sanitize_weights re-run on already-MLX-converted weights)
+# and finally makes DiffusionGemma usable. 0.6.0 and 0.6.4 are denylisted. This
+# transitively pulls mlx 0.32.0 + transformers 5.14.1. NOTE: mflux caps
+# mlx<0.32.0, so pip prints a dependency-conflict warning here — it is
+# cosmetic; mflux image generation is runtime-verified working on mlx 0.32.0.
+# Ka1zen version-gates MoE Fast Mode on mlx-vlm ≥ 0.6.3
+# (SpeculativeDecoding.moeMTPSupported). The in-app "Runtime Health" panel tracks
+# the same validated set. mflux is left unpinned (its latest still caps mlx).
 PACKAGES=(
     "mlx-lm==0.31.3"
-    "mlx-vlm==0.6.3"
+    "mlx-vlm==0.6.5"
     "huggingface-hub==1.17.0"
     "hf-transfer==0.1.9"
     "mflux"
@@ -103,7 +106,7 @@ done
 # `brew upgrade` can't change the version Ka1zen runs. The release tarball is
 # self-contained (dylibs via @loader_path). Falls back to Homebrew if the
 # download fails.
-LLAMA_BUILD="b9859"
+LLAMA_BUILD="b10054"
 LLAMA_DEST="$HOME/Library/Application Support/Ka1zen/llama"
 LLAMA_URL="https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_BUILD}/llama-${LLAMA_BUILD}-bin-macos-arm64.tar.gz"
 info "Installing llama.cpp ${LLAMA_BUILD} (GGUF backend, pinned)"

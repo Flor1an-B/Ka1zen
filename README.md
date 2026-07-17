@@ -12,7 +12,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2015%2B-blue" alt="macOS 15+">
   <img src="https://img.shields.io/badge/architecture-Apple%20Silicon-black" alt="Apple Silicon">
-  <img src="https://img.shields.io/badge/version-0.5.0-orange" alt="Version 0.5.0">
+  <img src="https://img.shields.io/badge/version-0.6.0-orange" alt="Version 0.6.0">
   <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-green" alt="PolyForm Noncommercial">
 </p>
 
@@ -50,6 +50,7 @@ Ka1zen is a native macOS app that runs open large-language models **locally** on
 |---|---|
 | 💬 **Local chat** | Qwen, Gemma, DeepSeek, Mistral, Llama — anything on [mlx-community](https://huggingface.co/mlx-community) |
 | ⚙️ **Two engines** | **MLX** (primary, fastest on Apple Silicon) **+ GGUF via llama.cpp** — the day-one bridge for models too new for MLX. Browse GGUF from [ggml-org](https://huggingface.co/ggml-org), [unsloth](https://huggingface.co/unsloth), [bartowski](https://huggingface.co/bartowski); pick a quant, Ka1zen runs `llama-server` directly (no Ollama / LM Studio). GGUF chat is at parity: text, vision, tools, thinking, logprobs, Fast Mode |
+| 🌫 **DiffusionGemma** | Google's block-diffusion LM (`mlx-community/diffusiongemma-26B-A4B-it`) runs in-app via **MLX** — it generates by parallel denoising instead of left-to-right, a different decoding paradigm you can try locally. MLX-only (llama.cpp has no diffusion path) |
 | 🖼 **Vision** | Drop images into the chat — Gemma 4, Pixtral, Mistral Small VLM, Qwen2-VL, LLaVA (MLX) · Qwen 3.6 & Gemma 4 (GGUF, via `mmproj`) |
 | ⚡ **Fast Mode** | Speculative decoding with byte-identical output, on **both engines**. **MTP** covers **dense AND Mixture-of-Experts** — Qwen 3.6 35B-A3B → **145 t/s** (MLX 4-bit), Gemma 4 26B-A4B, plus dense Qwen 27B / Gemma 31B (MoE needs mlx-vlm ≥ 0.6.3, auto-gated). New: an optional **DFlash for code** mode (GGUF) roughly **doubles code generation** on the slow dense models — Qwen 3.6 27B **×2.63**, Gemma 4 31B **×1.91**, lossless. One click — **Download with Fast Mode** — grabs the whole bundle (model + draft) in a single step |
 | 🎙 **Audio** | Speak to the model, it answers (Gemma 4) |
@@ -140,7 +141,7 @@ The script installs `mlx-lm`, `mlx-vlm`, `huggingface-hub`, `hf-transfer` and `m
 ```bash
 # Pinned to the versions Ka1zen is tested against:
 /Library/Frameworks/Python.framework/Versions/3.14/bin/pip3 install \
-  mlx-lm==0.31.3 mlx-vlm==0.6.3 huggingface-hub==1.17.0 hf_transfer==0.1.9 mflux
+  mlx-lm==0.31.3 mlx-vlm==0.6.5 huggingface-hub==1.17.0 hf_transfer==0.1.9 mflux
 
 # GGUF backend (optional) — simplest manual option; install.sh pins an exact build:
 brew install llama.cpp
