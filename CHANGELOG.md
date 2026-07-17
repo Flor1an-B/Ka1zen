@@ -3,6 +3,22 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] — 2026-07-17
+
+**Model Manager: pick your quant with Fast Mode, and one-click model updates.** Two Model Manager improvements plus a rendering fix.
+
+### Added
+
+- **Model update detection + one-click update.** Ka1zen now compares each installed model's local revision (the HF cache `refs/main` commit) against the latest on Hugging Face. When a model has been re-published (e.g. Google refreshing Gemma 4), its row shows an orange **"Update available"** badge with the new revision date and an **Update** button. Clicking it re-downloads the same quantization at the new revision (GGUF re-fetches your exact quant plus its MTP head and vision projector; MLX re-fetches the repo), shows live **"Updating… N%"** progress in the row, then **prunes the previous revision** to reclaim its disk, with a brief "Previous version removed" confirmation. Works for every installed model, MLX and GGUF. The check is silent and never nags on a network failure (unknown remote state is treated as "up to date", never as an update).
+
+### Changed
+
+- **Fast Mode download now lets you choose the quantization.** "Download with Fast Mode" used to force the recommended `Q4_K_M` quant with no picker. It now opens the quant picker (pre-selected to `Q4_K_M`) so you can pick a larger quant such as `Q8_0` and still get Fast Mode — the MTP head and vision projector are pulled alongside whatever quant you choose.
+
+### Fixed
+
+- **Family section headers no longer render blank or miscount after a re-download.** The model lists (chat picker, Model Manager, System Models) group models by family (Qwen, Gemma, …). The grouping emitted a header followed by a nested list per family, which has unstable SwiftUI identity: once a re-download reordered the underlying config list, a section header could render **blank** and its count go off by one (e.g. "Qwen 4" over three rows, with the Gemma header missing). The grouping is now flattened into a single identified row stream, so headers always render and counts are exact.
+
 ## [0.6.0] — 2026-07-17
 
 **Both inference engines updated: mlx-vlm 0.6.3 → 0.6.5 and llama.cpp b9859 → b10054.** This makes **DiffusionGemma actually work** (it crashed at load on the previously pinned engine), brings a large **Qwen 3.6 prompt-processing speedup**, **denylists the broken mlx-vlm 0.6.4** that garbled Qwen output, and hardens the GGUF backend's streaming and Fast Mode reliability. Every claim below was validated end-to-end in an isolated environment that never touches the shipping runtime, on the M5 Max — including a byte-identical non-regression of the GGUF baseline/MTP/DFlash output across builds before the llama.cpp bump.
