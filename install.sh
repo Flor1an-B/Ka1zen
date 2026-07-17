@@ -75,18 +75,22 @@ info "Upgrading pip"
 # inference (Qwen 3.6 dense 27B + MoE 35B-A3B → random-unicode garbage; #1521,
 # from an unconditional sanitize_weights re-run on already-MLX-converted weights)
 # and finally makes DiffusionGemma usable. 0.6.0 and 0.6.4 are denylisted. This
-# transitively pulls mlx 0.32.0 + transformers 5.14.1. NOTE: mflux caps
-# mlx<0.32.0, so pip prints a dependency-conflict warning here — it is
-# cosmetic; mflux image generation is runtime-verified working on mlx 0.32.0.
-# Ka1zen version-gates MoE Fast Mode on mlx-vlm ≥ 0.6.3
-# (SpeculativeDecoding.moeMTPSupported). The in-app "Runtime Health" panel tracks
-# the same validated set. mflux is left unpinned (its latest still caps mlx).
+# transitively needs mlx 0.32.0 + transformers 5.14.1. IMPORTANT: mflux caps
+# mlx<0.32.0 (all versions, incl. 0.18.0), so installing mflux AFTER mlx-vlm
+# makes pip DOWNGRADE mlx to 0.31.2 to satisfy mflux — which breaks mlx-vlm 0.6.5
+# (needs >= 0.32.0). So `mlx==0.32.0` is pinned LAST to force it back up after
+# mflux; the end state is mlx 0.32.0 with a harmless pip conflict warning about
+# mflux (image generation is runtime-verified working on 0.32.0 — the cap is
+# conservative, not a real break). Ka1zen version-gates MoE Fast Mode on mlx-vlm
+# ≥ 0.6.3 (SpeculativeDecoding.moeMTPSupported). The in-app "Runtime Health" panel
+# tracks the same validated set. 0.6.0 and 0.6.4 of mlx-vlm are denylisted.
 PACKAGES=(
     "mlx-lm==0.31.3"
     "mlx-vlm==0.6.5"
     "huggingface-hub==1.17.0"
     "hf-transfer==0.1.9"
     "mflux"
+    "mlx==0.32.0"   # MUST stay last — undoes mflux's mlx downgrade (see note above)
 )
 
 for pkg in "${PACKAGES[@]}"; do
