@@ -3,6 +3,17 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] — 2026-07-20
+
+**The generation-stats bar now shows the model's real speed on vision models, and the GGUF server stops crashing on a busy port.** Three fixes, each root-caused by controlled measurement on the M5 Max against Ka1zen's exact server path.
+
+### Fixed
+
+- **Generation speed is now read from the server, not mis-measured by the app.** The stats bar computed generation t/s client-side, from how fast tokens *arrived*. On vision models that figure was dragged down by Ka1zen's own main-thread markdown rendering: `mlx_vlm.server` streams with back-pressure, so when the UI renders slower than the model generates, the server suspends between tokens and arrival timing lags the real speed. Result: Gemma 4 26B-A4B (8-bit) showed ~73 t/s while the model was genuinely generating ~89 (measured: the server's own `predicted_per_second` holds ~89 even when a throttled client's arrival estimate collapses to ~68). Ka1zen now prefers the server's `timings.predicted_per_second` — pure model compute time, immune to UI back-pressure — and falls back to the client-side estimate only for servers that don't ship a `timings` block.
+- **Peak memory and prefill t/s reappear on the stats bar.** mlx-vlm 0.6.x moved these metrics out of the `usage` object into a sibling top-level `timings` field ("to keep usage spec-clean"). Ka1zen still read them from `usage`, so on the current engine they silently went blank. Both are now read from `timings` (with the legacy `usage` reads kept as a fallback).
+- **Vision models no longer lose their whole stats bar by ending the stream one chunk too early.** `mlx_vlm.server` and `llama-server` emit the `usage`+`timings` chunk *after* the `finish_reason` chunk, then `[DONE]`. A vision-model shortcut broke the read loop on `finish_reason`, so that trailing chunk was never consumed — which is why Gemma (MLX and GGUF, both classified as vision) showed no speed/memory while text-only Qwen (which didn't take the shortcut) did. The loop now waits for the trailing usage chunk; `tool_calls` stays terminal, and `[DONE]` plus the empty-choices path still bound the read.
+- **GGUF server no longer crashes when its port is already taken by another app.** Port selection only skipped ports claimed by other Ka1zen model configs, never checking the OS — so it could hand `llama-server` a port a live process already owned (e.g. a Vite dev server on 8081), and the server died at bind with "couldn't bind HTTP server socket". Ka1zen now probes each candidate with a real socket bind (`SO_REUSEADDR`, so a port merely in `TIME_WAIT` from a just-stopped server still counts as free) and walks past any port with a live listener.
+
 ## [0.6.1] — 2026-07-17
 
 **Model Manager: pick your quant with Fast Mode, and one-click model updates.** Two Model Manager improvements plus a rendering fix.
