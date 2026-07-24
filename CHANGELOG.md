@@ -3,6 +3,19 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] — 2026-07-24
+
+**Both inference engines updated again: mlx-vlm 0.6.5 → 0.6.7 and llama.cpp b10054 → b10107.** As with every engine bump, every claim below was validated end-to-end in an isolated environment that never touches the shipping runtime, on the M5 Max, before the pin changed.
+
+### Changed
+
+- **Pinned mlx-vlm 0.6.5 → 0.6.7.** Non-regression validated in an isolated venv before the bump: Gemma 4 26B-A4B (8-bit) and Qwen 3.6 35B-A3B (8-bit) both generate clean with zero CJK leakage (no repeat of the 0.6.4 corruption), server-side `timings` (prefill t/s, peak memory) still present, streaming reasoning's dual `reasoning_content`/`reasoning` fields still identical and safely coalesced by Ka1zen, and DiffusionGemma still loads and generates (now with the upstream decoder warm-start, #1589). Dependencies mlx 0.32.0 / mlx-lm 0.31.3 / transformers 5.14.1 unchanged; numpy 2.4.6 → 2.5.1.
+- **Pinned llama.cpp bumped b10054 → b10107.** Non-regression proven before shipping: on the same Qwen 3.6 27B, Qwen 3.6 35B-A3B and Gemma 4 26B-A4B models at temp 0, **baseline, MTP, and DFlash output are byte-identical between b10054 and b10107** (checked at the intermediate b10092 first, then re-confirmed all the way to b10107), with generation speed within measurement noise (±1-2%) on every config. The delta over 53 commits has no Apple-Silicon kernel work beyond a minor Metal `leaky_relu` f16 fix, so this is a pure reliability/compatibility bump, same as b9859 → b10054 before it.
+
+### Community
+
+- **prism-ml/Ternary-Bonsai-27B-gguf**, a ternary (near-2-bit) quantization, tested on Ka1zen's GGUF backend: 8111 → 549 tokens (input → output), TTFT 11.47 s, 710 t/s prefill, 40.3 t/s generation.
+
 ## [0.6.2] — 2026-07-20
 
 **The generation-stats bar now shows the model's real speed on vision models, and the GGUF server stops crashing on a busy port.** Three fixes, each root-caused by controlled measurement on the M5 Max against Ka1zen's exact server path.
