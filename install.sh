@@ -70,27 +70,32 @@ info "Upgrading pip"
 "$PIP" install --upgrade pip >/dev/null
 
 # --- 3. Install packages (PINNED to validated versions) ---
-# We pin exact versions instead of `--upgrade`. mlx-vlm is pinned to 0.6.8
-# (validated 2026-07-28, non-regression vs 0.6.7 in an isolated venv: trivial
-# Qwen 3.6 35B-A3B prompt clean, the #1317 MoE+MTP long-context repro clean
-# (no CJK loop), Gemma 4 E4B dense + MTP clean, DiffusionGemma mxfp4 still
-# loads/generates with no "Biases must be provided"). It still carries the
-# 0.6.5 fix for the 0.6.4 regression that broke qwen3_5 inference (Qwen 3.6
-# dense 27B + MoE 35B-A3B → random-unicode garbage; #1521, from an
-# unconditional sanitize_weights re-run on already-MLX-converted weights).
-# 0.6.0 and 0.6.4 are denylisted. This transitively needs mlx 0.32.0 +
-# transformers 5.14.1. IMPORTANT: mflux caps mlx<0.32.0 (all versions, incl.
-# 0.18.0), so installing mflux AFTER mlx-vlm makes pip DOWNGRADE mlx to 0.31.2
-# to satisfy mflux — which breaks mlx-vlm 0.6.8 (needs >= 0.32.0). So
-# `mlx==0.32.0` is pinned LAST to force it back up after mflux; the end state
-# is mlx 0.32.0 with a harmless pip conflict warning about mflux (image
-# generation is runtime-verified working on 0.32.0 — the cap is conservative,
-# not a real break). Ka1zen version-gates MoE Fast Mode on mlx-vlm ≥ 0.6.3
+# We pin exact versions instead of `--upgrade`. mlx-vlm is pinned to 0.6.10
+# (validated 2026-08-04, non-regression vs 0.6.8 in an isolated venv against
+# real installed weights: the #1317 MoE+MTP long-context repro clean (no CJK
+# loop, 111.6 t/s), a 2-turn conversation with Fast Mode on clean (probing
+# #1748's rotating-KV-cache prompt-cache bug — no crash, no cross-turn
+# confusion), Gemma 4 E4B dense + MTP clean (110 t/s), DiffusionGemma mxfp4
+# still loads/generates with no "Biases must be provided". 0.6.9/0.6.10 also
+# carry real upstream fixes for Ka1zen's exact setup: #1748 (prompt-cache
+# reuse corrupting rotating/sliding-window KV caches once speculative
+# decoding wraps them) and #1754 (Qwen MTP draft-shard keys leaking into base
+# RMSNorm sanitization — "corrupted output even with MTP disabled"). It still
+# carries the 0.6.5 fix for the 0.6.4 regression that broke qwen3_5 inference
+# (Qwen 3.6 dense 27B + MoE 35B-A3B → random-unicode garbage; #1521). 0.6.0
+# and 0.6.4 are denylisted. This transitively needs mlx 0.32.0 + transformers
+# 5.14.1. IMPORTANT: mflux caps mlx<0.32.0 (all versions, incl. 0.18.0), so
+# installing mflux AFTER mlx-vlm makes pip DOWNGRADE mlx to 0.31.2 to satisfy
+# mflux — which breaks mlx-vlm 0.6.10 (needs >= 0.32.0). So `mlx==0.32.0` is
+# pinned LAST to force it back up after mflux; the end state is mlx 0.32.0
+# with a harmless pip conflict warning about mflux (image generation is
+# runtime-verified working on 0.32.0 — the cap is conservative, not a real
+# break). Ka1zen version-gates MoE Fast Mode on mlx-vlm ≥ 0.6.3
 # (SpeculativeDecoding.moeMTPSupported). The in-app "Runtime Health" panel
 # tracks the same validated set. 0.6.0 and 0.6.4 of mlx-vlm are denylisted.
 PACKAGES=(
     "mlx-lm==0.31.3"
-    "mlx-vlm==0.6.8"
+    "mlx-vlm==0.6.10"
     "huggingface-hub==1.17.0"
     "hf-transfer==0.1.9"
     "mflux"
@@ -114,7 +119,7 @@ done
 # `brew upgrade` can't change the version Ka1zen runs. The release tarball is
 # self-contained (dylibs via @loader_path). Falls back to Homebrew if the
 # download fails.
-LLAMA_BUILD="b10158"
+LLAMA_BUILD="b10273"
 LLAMA_DEST="$HOME/Library/Application Support/Ka1zen/llama"
 LLAMA_URL="https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_BUILD}/llama-${LLAMA_BUILD}-bin-macos-arm64.tar.gz"
 info "Installing llama.cpp ${LLAMA_BUILD} (GGUF backend, pinned)"
