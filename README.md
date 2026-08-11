@@ -12,7 +12,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2015%2B-blue" alt="macOS 15+">
   <img src="https://img.shields.io/badge/architecture-Apple%20Silicon-black" alt="Apple Silicon">
-  <img src="https://img.shields.io/badge/version-0.6.4-orange" alt="Version 0.6.4">
+  <img src="https://img.shields.io/badge/version-0.6.5-orange" alt="Version 0.6.5">
   <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-green" alt="PolyForm Noncommercial">
 </p>
 
@@ -141,9 +141,9 @@ The script installs `mlx-lm`, `mlx-vlm`, `huggingface-hub`, `hf-transfer` and `m
 ```bash
 # Pinned to the versions Ka1zen is tested against:
 /Library/Frameworks/Python.framework/Versions/3.14/bin/pip3 install \
-  mlx-lm==0.31.3 mlx-vlm==0.6.10 huggingface-hub==1.17.0 hf_transfer==0.1.9 mflux mlx==0.32.0
+  mlx-lm==0.31.3 mlx-vlm==0.6.12 huggingface-hub==1.17.0 hf_transfer==0.1.9 mflux mlx==0.32.0
 # mlx==0.32.0 goes LAST on purpose: mflux caps mlx<0.32.0 and would otherwise
-# downgrade it, breaking mlx-vlm 0.6.10 (which needs 0.32.0). The trailing pin
+# downgrade it, breaking mlx-vlm 0.6.12 (which needs 0.32.0). The trailing pin
 # forces mlx back to 0.32.0 (mflux still runs fine on it; pip prints a harmless warning).
 
 # GGUF backend (optional) — simplest manual option; install.sh pins an exact build:

@@ -3,6 +3,15 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.5] — 2026-08-11
+
+**Both inference engines updated again: mlx-vlm 0.6.10 → 0.6.12 and llama.cpp b10273 → b10357.** As with every engine bump, every claim below was validated end-to-end in an isolated environment that never touches the shipping runtime, on the M5 Max, before the pin changed.
+
+### Changed
+
+- **Pinned mlx-vlm 0.6.10 → 0.6.12** (0.6.11 and 0.6.12 folded in). Non-regression validated against real installed weights before the bump: the long-context MoE + MTP reproducer (Blaizzy/mlx-vlm#1317) stays clean (114.8 t/s, coherent French, zero CJK leakage); a 2-turn conversation with Fast Mode on stays coherent with no cross-turn confusion; Gemma 4 E4B dense + MTP clean (112.6 t/s); DiffusionGemma mxfp4 still loads and generates with no "Biases must be provided". 0.6.11/0.6.12 are mostly Qwen 3.6 (`qwen3_5`) hardening — a ragged-decode fix for GPUs that reject a 1024-thread threadgroup (#1799), a structured-output fix on padded-vocab checkpoints (#1805), and a reasoning-split fix when the prompt opens the thinking block (#1811) — no regression-class change. mlx-vlm 0.6.12 requires `transformers >= 5.14.0`: an in-place upgrade keeps the pinned 5.14.1 (re-smoke-tested clean on the Qwen MoE MTP repro), while a fresh `install.sh` resolves 5.15.0 (the version the full regression suite ran on); both were verified clean. mlx 0.32.0 / mlx-lm 0.31.3 unchanged.
+- **Pinned llama.cpp bumped b10273 → b10357** (84 commits). This delta includes a genuine Apple-Silicon correctness fix — **#26708, "metal : fix NORM/RMS_NORM for row lengths that leave a partial simdgroup"** — which can change output on models whose hidden dimension isn't a multiple of 32, so this bump was coherence-checked rather than assumed byte-identical. No regression: Qwen 3.6 27B dense MTP (23.8 t/s), Qwen 3.6 35B-A3B MoE MTP (108.3 t/s), Qwen 3.6 27B GGUF DFlash (28.5 t/s) and Gemma 4 26B-A4B MoE MTP (109.6 t/s) all generate coherent output at speeds within measurement noise. Another MTP memory-allocation fix in the range (#26605) only touches llama.cpp's automatic `--fit` path, which Ka1zen never uses (it always passes an explicit `-ngl 999`). No `--spec-type`/`--model-draft` flag changes.
+
 ## [0.6.4] — 2026-08-04
 
 **Both inference engines updated again: mlx-vlm 0.6.7 → 0.6.10 and llama.cpp b10107 → b10273.** As with every engine bump, every claim below was validated end-to-end in an isolated environment that never touches the shipping runtime, on the M5 Max, before the pin changed.
