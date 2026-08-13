@@ -3,6 +3,19 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.6] — 2026-08-13
+
+**Both inference engines updated again: mlx-vlm 0.6.12 → 0.6.13 and llama.cpp b10357 → b10405 — and a bug that the llama.cpp bump exposed is fixed.** As with every engine bump, every claim below was validated end-to-end in an isolated environment that never touches the shipping runtime, on the M5 Max, before the pin changed.
+
+### Fixed
+
+- **Fast Mode no longer silently turns off when llama.cpp reports a newer build.** llama.cpp switched to semantic versioning ([ggml-org/llama.cpp#26839](https://github.com/ggml-org/llama.cpp/pull/26839)), so `llama-server --version` now prints `version: 0.1.0-dev (build 10405, …)` instead of the old `version: 10405 (…)`. Ka1zen read the build number with a `version: <digits>` pattern, which on the new format matched the leading `0` of `0.1.0-dev` and resolved the build to **0** — below every Fast Mode gate (MTP ≥ b9568, DFlash, Gemma unified-vision ≥ b9518), so all of them would have quietly fallen back to plain decoding. Both places that parse the version (the feature-gate resolver and the Runtime Health panel row) now read the `(build N…)` group first and fall back to the old shape, so build detection is correct on both formats. Caught by the pre-ship regression pass on b10405.
+
+### Changed
+
+- **Pinned mlx-vlm 0.6.12 → 0.6.13.** Non-regression validated against real installed weights before the bump: the long-context MoE + MTP reproducer (Blaizzy/mlx-vlm#1317) stays clean (113.7 t/s, zero CJK leakage); a 2-turn conversation stays coherent (exercises the new APC prefix-reuse for growing prompts, #1713, and the last-token stream flush, #1845); a Qwen tool call returns a well-formed `tool_calls` object (#1864 fixes null content in assistant tool calls); Gemma 4 E4B dense + MTP clean (108.2 t/s); DiffusionGemma mxfp4 still clean. 0.6.13 is mostly serving-path polish (APC #1713, stream flush #1845, RoPE eager-eval #1854, model reasoning-config/response-templates #1848) with no regression-class change. transformers behaviour is unchanged from 0.6.12 (needs ≥ 5.14.0; an upgrade keeps 5.14.1, a fresh install resolves 5.15.0, both verified clean). mlx 0.32.0 / mlx-lm 0.31.3 unchanged.
+- **Pinned llama.cpp bumped b10357 → b10405** (48 commits). Engine-side non-regression proven on Qwen 3.6 35B-A3B MoE MTP (108.4 t/s), Qwen 3.6 27B GGUF DFlash (31.7 t/s — the DFlash change #26900 does no harm), Gemma 4 26B-A4B MoE MTP (112.0 t/s), and a Qwen tool call (llama.cpp #26793 "tighten bare function parsing for Qwen models" returns a well-formed `tool_calls`). All coherent, no CJK. No `--spec-type`/`--model-draft` flag changes; the only Ka1zen-side impact was the version-string parser fixed above.
+
 ## [0.6.5] — 2026-08-11
 
 **Both inference engines updated again: mlx-vlm 0.6.10 → 0.6.12 and llama.cpp b10273 → b10357.** As with every engine bump, every claim below was validated end-to-end in an isolated environment that never touches the shipping runtime, on the M5 Max, before the pin changed.
