@@ -3,6 +3,15 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.7] — 2026-08-20
+
+**Both inference engines updated again: mlx-vlm 0.6.13 → 0.6.15 and llama.cpp b10405 → b10509.** As with every engine bump, every claim below was validated end-to-end in an isolated environment that never touches the shipping runtime, on the M5 Max, before the pin changed.
+
+### Changed
+
+- **Pinned mlx-vlm 0.6.13 → 0.6.15** (0.6.14 and 0.6.15 folded in), tested in the exact combo that ships — mlx-vlm 0.6.15 + mlx 0.32.0. (mlx 0.32.1 shipped the same week and mlx-vlm 0.6.15 only requires `mlx >= 0.32.0`, but `install.sh`'s trailing `mlx==0.32.0` pin always wins regardless, so the mlx pin is unaffected here.) Non-regression validated: the long-context MoE + MTP reproducer (Blaizzy/mlx-vlm#1317) stays clean (114.2 t/s, zero CJK leakage); a 2-turn conversation stays coherent; Gemma 4 E4B dense + MTP clean (109.3 t/s); DiffusionGemma mxfp4 still clean. 0.6.14/0.6.15 are mostly serving-path polish — a prefix-cache fix for short first prompts (#1901) and a fix stopping one batched request's answer from depending on a neighbour's length (#1946) — no regression-class change. The `thinking_budget` fix (#1912) doesn't apply: Ka1zen never sets that parameter.
+- **Pinned llama.cpp bumped b10405 → b10509** (104 commits). `--version`'s format is unchanged in shape since the v0.6.6 fix (now `0.1.2-dev` instead of `0.1.0-dev`, still `(build N…)`) — the hardened parser reads it correctly. Two items worth noting: llama.cpp added spec-type/MTP-draft auto-detection from GGUF metadata (#26814, #27005) — verified Ka1zen's explicit `--spec-type draft-mtp` is still honoured with no conflict; and Metal's q8_0 dequant path changed (#27370), which is Ka1zen's most-used quant, so this bump was coherence-checked rather than assumed byte-identical. Engine-side non-regression proven on Qwen 3.6 35B-A3B MoE MTP (107.1 t/s), Gemma 4 26B-A4B MoE MTP (110.1 t/s), and a Qwen tool call (still a well-formed `tool_calls`). **GGUF DFlash was not re-verified this round** — the cached Qwen 3.6 27B target model was no longer in the local model library (unrelated to this bump); it stays enabled and will be re-checked against the next available target.
+
 ## [0.6.6] — 2026-08-13
 
 **Both inference engines updated again: mlx-vlm 0.6.12 → 0.6.13 and llama.cpp b10357 → b10405 — and a bug that the llama.cpp bump exposed is fixed.** As with every engine bump, every claim below was validated end-to-end in an isolated environment that never touches the shipping runtime, on the M5 Max, before the pin changed.
