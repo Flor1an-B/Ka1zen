@@ -70,36 +70,43 @@ info "Upgrading pip"
 "$PIP" install --upgrade pip >/dev/null
 
 # --- 3. Install packages (PINNED to validated versions) ---
-# We pin exact versions instead of `--upgrade`. mlx-vlm is pinned to 0.6.15
-# (validated 2026-08-20, non-regression vs 0.6.13 against real installed
-# weights, tested in the EXACT combo that ships — mlx-vlm 0.6.15 + mlx 0.32.0
-# (0.6.15 only needs mlx>=0.32.0; the trailing `mlx==0.32.0` pin below always
-# wins anyway, so mlx 0.32.1's release the same week changes nothing here):
-# the #1317 MoE+MTP repro clean (114.2 t/s, 0 CJK), a 2-turn conversation
-# clean, Gemma 4 E4B dense + MTP clean (109.3 t/s), DiffusionGemma mxfp4 still
-# clean. 0.6.14/0.6.15 are serving-path polish (prefix-cache fix for short
-# first prompts #1901, batched-row independence fix #1946) — no regression
-# class; `thinking_budget` (#1912) doesn't apply, Ka1zen never sets it. It
-# still carries the 0.6.5 fix for the 0.6.4 regression that broke qwen3_5
-# inference (#1521), plus 0.6.9's #1748/#1754 and 0.6.13's #1864 tool-call
-# fix. 0.6.0 and 0.6.4 are denylisted. transformers unchanged (needs >= 5.14.0;
-# prod keeps 5.14.1, fresh install resolves ~5.15.x, both verified clean
-# historically). IMPORTANT: mflux caps mlx<0.32.0 (all versions, incl. 0.18.0),
-# so installing mflux AFTER mlx-vlm makes pip DOWNGRADE mlx to 0.31.2 to
-# satisfy mflux — which breaks mlx-vlm (needs >= 0.32.0). So `mlx==0.32.0` is
-# pinned LAST to force it back up after mflux; the end state is mlx 0.32.0
-# with a harmless pip conflict warning about mflux (image generation is
-# runtime-verified working on 0.32.0 — the cap is conservative, not a real
-# break). Ka1zen version-gates MoE Fast Mode on mlx-vlm ≥ 0.6.3
-# (SpeculativeDecoding.moeMTPSupported). The in-app "Runtime Health" panel
-# tracks the same validated set. 0.6.0 and 0.6.4 are denylisted.
+# We pin exact versions instead of `--upgrade`. mlx-vlm is pinned to 0.7.0
+# (validated 2026-09-10, isolated-venv regression vs 0.6.15 on real weights,
+# tested in the EXACT combo that ships — mlx-vlm 0.7.0 + mlx 0.32.2 (0.7.0
+# requires mlx>=0.32.2, up from >=0.32.0 — PR #2133 "Require MLX 0.32.2 for
+# faster speculative decoding" — so the trailing `mlx==0.32.2` pin below was
+# bumped to match): the Qwen 3.6 35B-A3B MoE+MTP repro is clean but ~15%
+# SLOWER than 0.6.15 (was ~20% slower on the denylisted 0.6.16 in between;
+# #2120/#2125/#2133/#2140/#2152 improved it without fully fixing it — root
+# cause still unconfirmed upstream). Accepted as a known, documented
+# regression rather than a blocker — see DependencyManifest.swift for the
+# full non-regression record (Gemma 4 E4B/26B-A4B MTP clean, DiffusionGemma
+# mxfp4 clean, tool-calls clean, 2-turn clean). mlx-vlm 0.7.0 also pulls in
+# `mlx-audio>=0.4.8` as a new transitive dependency (needed for its VoiceChat
+# route) — Ka1zen doesn't use it, harmless extra install. 0.6.0, 0.6.4 and
+# 0.6.16 are denylisted. transformers needs >= 5.14.0 (unchanged floor);
+# verified unchanged on the real prod install (stays 5.14.1 — an unpinned
+# `pip install "$pkg"` leaves an already-satisfying package alone). IMPORTANT
+# (still true, just re-verified on the real prod run): the installed mflux
+# (0.17.5 — unpinned `pip install "mflux"` does NOT upgrade an already-
+# installed package, so it stays well behind the 0.19.x PyPI latest that
+# raised its mlx floor to >=0.32.0) still caps mlx<0.32.0, so installing
+# mflux AFTER mlx-vlm makes pip DOWNGRADE mlx to 0.31.2 to satisfy it —
+# which breaks mlx-vlm (needs >= 0.32.2 as of 0.7.0). So `mlx==0.32.2` is
+# still pinned LAST to force it back up after mflux; the end state is mlx
+# 0.32.2 with a harmless pip conflict warning about mflux (image generation
+# was NOT re-verified this round — out of scope for this LLM-engine
+# regression cycle, but nothing here changes its runtime behavior). Ka1zen
+# version-gates MoE Fast Mode on
+# mlx-vlm ≥ 0.6.3 (SpeculativeDecoding.moeMTPSupported). The in-app "Runtime
+# Health" panel tracks the same validated set.
 PACKAGES=(
     "mlx-lm==0.31.3"
-    "mlx-vlm==0.6.15"
+    "mlx-vlm==0.7.0"
     "huggingface-hub==1.17.0"
     "hf-transfer==0.1.9"
     "mflux"
-    "mlx==0.32.0"   # MUST stay last — undoes mflux's mlx downgrade (see note above)
+    "mlx==0.32.2"   # MUST stay last — guards against any mflux mlx-downgrade (see note above)
 )
 
 for pkg in "${PACKAGES[@]}"; do
@@ -119,7 +126,7 @@ done
 # `brew upgrade` can't change the version Ka1zen runs. The release tarball is
 # self-contained (dylibs via @loader_path). Falls back to Homebrew if the
 # download fails.
-LLAMA_BUILD="b10509"
+LLAMA_BUILD="b10894"
 LLAMA_DEST="$HOME/Library/Application Support/Ka1zen/llama"
 LLAMA_URL="https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_BUILD}/llama-${LLAMA_BUILD}-bin-macos-arm64.tar.gz"
 info "Installing llama.cpp ${LLAMA_BUILD} (GGUF backend, pinned)"
@@ -154,11 +161,22 @@ for mod in mlx_lm mlx_vlm huggingface_hub mflux; do
     fi
 done
 # Prefer the pinned managed binary (what Ka1zen actually runs); fall back to a
-# PATH/Homebrew llama-server.
+# PATH/Homebrew llama-server. llama.cpp switched to semantic versioning
+# (upstream #26839, ~b10375+): `--version` now prints "version: X.Y.Z-dev
+# (build N, commit H)" instead of the old "version: N (H)", so a naive
+# `version: [0-9]*` grep matches the leading digit of X.Y.Z and always
+# reports "0" — prefer the `(build N…)` group and fall back to the old shape,
+# matching `LlamaServerResolver.readBuildNumber`'s hardened parser.
+llama_build() {
+    local out; out="$("$1" --version 2>&1)"
+    local n; n="$(echo "$out" | grep -oE 'build [0-9]+' | grep -oE '[0-9]+' | head -1)"
+    [ -z "$n" ] && n="$(echo "$out" | grep -oE 'version: [0-9]+' | grep -oE '[0-9]+' | head -1)"
+    echo "build $n"
+}
 if [ -x "$LLAMA_DEST/llama-server" ]; then
-    echo "  ${GREEN}✓${RESET} llama-server pinned ($("$LLAMA_DEST/llama-server" --version 2>&1 | grep -o 'version: [0-9]*' | head -1))"
+    echo "  ${GREEN}✓${RESET} llama-server pinned ($(llama_build "$LLAMA_DEST/llama-server"))"
 elif command -v llama-server >/dev/null 2>&1; then
-    echo "  ${GREEN}✓${RESET} llama-server ($(llama-server --version 2>&1 | grep -o 'version: [0-9]*' | head -1)) — Homebrew fallback"
+    echo "  ${GREEN}✓${RESET} llama-server ($(llama_build llama-server)) — Homebrew fallback"
 else
     echo "  ${YELLOW}–${RESET} llama-server (optional — needed only for GGUF models)"
 fi
