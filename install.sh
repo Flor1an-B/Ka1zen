@@ -70,39 +70,33 @@ info "Upgrading pip"
 "$PIP" install --upgrade pip >/dev/null
 
 # --- 3. Install packages (PINNED to validated versions) ---
-# We pin exact versions instead of `--upgrade`. mlx-vlm is pinned to 0.7.0
-# (validated 2026-09-10, isolated-venv regression vs 0.6.15 on real weights,
-# tested in the EXACT combo that ships — mlx-vlm 0.7.0 + mlx 0.32.2 (0.7.0
-# requires mlx>=0.32.2, up from >=0.32.0 — PR #2133 "Require MLX 0.32.2 for
-# faster speculative decoding" — so the trailing `mlx==0.32.2` pin below was
-# bumped to match): the Qwen 3.6 35B-A3B MoE+MTP repro is clean but ~15%
-# SLOWER than 0.6.15 (was ~20% slower on the denylisted 0.6.16 in between;
-# #2120/#2125/#2133/#2140/#2152 improved it without fully fixing it — root
-# cause still unconfirmed upstream). Accepted as a known, documented
-# regression rather than a blocker — see DependencyManifest.swift for the
-# full non-regression record (Gemma 4 E4B/26B-A4B MTP clean, DiffusionGemma
-# mxfp4 clean, tool-calls clean, 2-turn clean). mlx-vlm 0.7.0 also pulls in
-# `mlx-audio>=0.4.8` as a new transitive dependency (needed for its VoiceChat
-# route) — Ka1zen doesn't use it, harmless extra install. 0.6.0, 0.6.4 and
-# 0.6.16 are denylisted. transformers needs >= 5.14.0 (unchanged floor);
-# verified unchanged on the real prod install (stays 5.14.1 — an unpinned
-# `pip install "$pkg"` leaves an already-satisfying package alone). IMPORTANT
-# (still true, just re-verified on the real prod run): the installed mflux
-# (0.17.5 — unpinned `pip install "mflux"` does NOT upgrade an already-
-# installed package, so it stays well behind the 0.19.x PyPI latest that
-# raised its mlx floor to >=0.32.0) still caps mlx<0.32.0, so installing
-# mflux AFTER mlx-vlm makes pip DOWNGRADE mlx to 0.31.2 to satisfy it —
-# which breaks mlx-vlm (needs >= 0.32.2 as of 0.7.0). So `mlx==0.32.2` is
-# still pinned LAST to force it back up after mflux; the end state is mlx
-# 0.32.2 with a harmless pip conflict warning about mflux (image generation
-# was NOT re-verified this round — out of scope for this LLM-engine
-# regression cycle, but nothing here changes its runtime behavior). Ka1zen
+# We pin exact versions instead of `--upgrade`. mlx-vlm is pinned to 0.7.1
+# (validated 2026-09-21, isolated-venv regression on real weights — mlx floor
+# unchanged at >=0.32.2, so `mlx==0.32.2` below is unaffected). This is a
+# NEUTRAL bump on the metric we actually track: a same-session A/B against
+# 0.7.0 on the Qwen 3.6 35B-A3B MoE+MTP repro showed no measurable movement
+# either way (~106 t/s both), so the known ~15%-vs-0.6.15 MTP regression
+# (see DependencyManifest.swift / knownBad["mlx-vlm"]["0.6.16"]) carries
+# forward unchanged — still accepted as a documented tradeoff, not new.
+# Everything else clean: Gemma 4 E4B dense+MTP, Gemma 4 26B-A4B MoE+MTP,
+# DiffusionGemma mxfp4, tool-calls, 2-turn. 0.7.1 is mostly new model
+# support + a tool-calling refactor; no MTP/speculative-decoding change of
+# note landed for Ka1zen's Qwen/Gemma pairings. 0.6.0, 0.6.4 and 0.6.16 are
+# denylisted. transformers needs >= 5.14.0 (unchanged floor; prod stays
+# 5.14.1). IMPORTANT (still true — re-verified on the real prod run): the
+# installed mflux (0.17.5 — unpinned `pip install "mflux"` does NOT upgrade
+# an already-installed package) still caps mlx<0.32.0, so installing mflux
+# AFTER mlx-vlm makes pip DOWNGRADE mlx to 0.31.2 to satisfy it — which
+# breaks mlx-vlm (needs >= 0.32.2). So `mlx==0.32.2` is still pinned LAST to
+# force it back up after mflux; the end state is mlx 0.32.2 with a harmless
+# pip conflict warning about mflux (image generation not re-verified this
+# round — out of scope for this LLM-engine regression cycle). Ka1zen
 # version-gates MoE Fast Mode on
 # mlx-vlm ≥ 0.6.3 (SpeculativeDecoding.moeMTPSupported). The in-app "Runtime
 # Health" panel tracks the same validated set.
 PACKAGES=(
     "mlx-lm==0.31.3"
-    "mlx-vlm==0.7.0"
+    "mlx-vlm==0.7.1"
     "huggingface-hub==1.17.0"
     "hf-transfer==0.1.9"
     "mflux"
@@ -126,7 +120,7 @@ done
 # `brew upgrade` can't change the version Ka1zen runs. The release tarball is
 # self-contained (dylibs via @loader_path). Falls back to Homebrew if the
 # download fails.
-LLAMA_BUILD="b10894"
+LLAMA_BUILD="b11070"
 LLAMA_DEST="$HOME/Library/Application Support/Ka1zen/llama"
 LLAMA_URL="https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_BUILD}/llama-${LLAMA_BUILD}-bin-macos-arm64.tar.gz"
 info "Installing llama.cpp ${LLAMA_BUILD} (GGUF backend, pinned)"

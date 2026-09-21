@@ -3,6 +3,15 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.9] — 2026-09-21
+
+**Both inference engines updated again: mlx-vlm 0.7.0 → 0.7.1 and llama.cpp b10894 → b11070.** As with every engine bump, every claim below was validated end-to-end in an isolated environment that never touches the shipping runtime, on the M5 Max, before the pin changed.
+
+### Changed
+
+- **Pinned mlx-vlm 0.7.0 → 0.7.1.** Neutral on the metric that matters: a same-session A/B against 0.7.0 on the Qwen 3.6 35B-A3B MoE + MTP repro showed no measurable movement either way (~106 t/s both) — the known ~15%-vs-0.6.15 MTP regression (denylisted 0.6.16, accepted tradeoff since 0.6.8) carries forward unchanged, neither better nor worse. Everything else non-regressed: Gemma 4 E4B dense + MTP clean, Gemma 4 26B-A4B MoE + MTP clean (84.3-91.2 t/s, matching 0.7.0's ~82.2 t/s), DiffusionGemma mxfp4 clean, tool-calls clean, a 2-turn conversation clean. 0.7.1 is mostly new model support (GLM-5 Next, Hy4, Spark-X2.5, PP-DocLayout V3, Indic-OCR, and others) plus a tool-calling package refactor — no MTP/speculative-decoding change of note for Ka1zen's Qwen/Gemma pairings. mlx floor unchanged (still >= 0.32.2).
+- **Pinned llama.cpp bumped b10894 → b11070** (176 commits). Priority check this round: upstream **#26223**, a Metal correctness fix for NaN output in `mul_mm_id` (the MoE expert-routing path, switches on at a 32-token prefill batch) when activations exceed the f16 range. Both of Ka1zen's MoE Fast Mode targets were verified clean on long-context prefill (well past the 32-token switch): Qwen 3.6 35B-A3B (109-118 t/s, no NaN/corruption) and Gemma 4 26B-A4B via the `*-assistant` drafter (125.1 t/s, up from 109.0 t/s — a real speed gain alongside the correctness fix, no NaN/corruption). Also clean: a tool-call, a 2-turn conversation, and Qwen 3.6 27B GGUF DFlash (45.4 t/s / 74.1% accept, up from 35.1 t/s / 61.5%). **Gemma 4 31B GGUF DFlash was inconclusive this round** — the test ran under real memory contention from other processes on the dev machine and produced an invalid ~1.1 t/s reading; the partial output was coherent, so this looks like resource contention rather than a bug, but it wasn't reliably re-verified.
+
 ## [0.6.8] — 2026-09-10
 
 **Both inference engines updated again: mlx-vlm 0.6.15 → 0.7.0 and llama.cpp b10509 → b10894.** As with every engine bump, every claim below was validated end-to-end in an isolated environment that never touches the shipping runtime, on the M5 Max, before the pin changed. This cycle also carries a known, deliberately accepted tradeoff — see below.
