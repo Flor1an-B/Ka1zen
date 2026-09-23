@@ -3,6 +3,29 @@
 All notable changes to Ka1zen are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.11] — 2026-09-23
+
+### Added
+
+- **Qwen-Image 2.1 support.** The image-generation feature now recognizes Qwen-Image 2.1 checkpoints and routes them to mflux's dedicated `mflux-generate-qwen-2.1` CLI instead of the older binary built for the original Qwen-Image line, which failed to load 2.1's different architecture (a single-stream block-causal DiT with a Qwen3-VL text encoder). Requires mflux ≥ 0.20.0 (`uv tool install --upgrade mflux`) — verified end-to-end with a real generation against the official `Qwen/Qwen-Image-2.1` weights.
+
+### Changed
+
+- **Pinned llama.cpp bumped b11101 → b11120** (20 commits; mlx-vlm unchanged at 0.7.2, no new release since the last bump). Notable: **#28450**, "Performance tune for gemma4-26b-a4b flash attention shape" — a real, measured gain: Gemma 4 26B-A4B MoE + MTP 125.1 → 129.0 t/s (+3.1%). Qwen 3.6 35B-A3B MoE self-spec MTP also ticked up (116.1 → 120.4 t/s), as did Qwen 3.6 27B GGUF DFlash (44.0 → 44.25 t/s). Tool-call and a 2-turn conversation both clean, no correctness issues anywhere. **Gemma 4 31B GGUF DFlash was inconclusive for a third consecutive cycle** — confirmed real memory contention each time (up to 93.6% swap) from other processes on the dev machine, not an engine issue; still needs an isolated re-run on an idle machine for a trustworthy number.
+
+### Fixed
+
+- **Runtime Health no longer shows a confusing, unfixable "Dependency conflicts" warning about mflux.** It reported `mflux has requirement mlx<0.32.0 … but you have mlx 0.32.2` — technically true but harmless (the pip-installed `mflux` this refers to is a near-unused fallback; real image generation runs through a separate, independently-managed mflux install) and, worse, actively misleading: a user trying to "fix" it by upgrading that mflux would hit a real bug (confirmed while investigating this) where a newer mflux transitively pulls in a `torch` version that makes `import mlx_vlm` crash intermittently. Runtime Health's dependency-conflict check now excludes conflicts reported by mflux specifically, since its bundled requirements aren't a reliable signal of Ka1zen's actual runtime health.
+
+## [0.6.10] — 2026-09-22
+
+**Both inference engines updated again: mlx-vlm 0.7.1 → 0.7.2 and llama.cpp b11070 → b11101.** As with every engine bump, every claim below was validated end-to-end in an isolated environment that never touches the shipping runtime, on the M5 Max, before the pin changed.
+
+### Changed
+
+- **Pinned mlx-vlm 0.7.1 → 0.7.2.** Ships a substantial APC/prefix-cache refactor across seven PRs — the historically fragile area for Ka1zen (recall the #1748 rotating-KV-cache corruption a few cycles back was in this same family) — so this round specifically stress-tested 2-turn Fast Mode conversations on both MoE architectures: clean, no cross-turn confusion, exactly one model load per session (no silent mid-conversation reload). The known ~15%-vs-0.6.15 Qwen MTP regression is unchanged (~107 t/s, matching 0.7.0/0.7.1 on the same prompt) — still the accepted tradeoff, not new. Also clean: Gemma 4 E4B dense + MTP (105.5 t/s), Gemma 4 26B-A4B MoE + MTP (92.8 t/s), DiffusionGemma mxfp4, tool-calls. **Notable addition: 0.7.2 ships native Qwen-Image-2.1 (text-to-image + edit) support.** Ka1zen's model picker takes any HuggingFace repo ID with no family allowlist, so this becomes usable with zero Ka1zen-side code changes — not exercised by this LLM-engine regression pass, since image-generation quality isn't part of this harness. mlx floor unchanged (still >= 0.32.2).
+- **Pinned llama.cpp bumped b11070 → b11101** (31 commits). Notable: **#29220**, a Metal correctness fix for an out-of-bounds read in the flash-attention pre-pass when batch size isn't divisible by 8 — Ka1zen always passes `--flash-attn on`, checked for anomalies in standard usage (the exact edge-case batch size wasn't specifically isolated). Re-verified Qwen 3.6 35B-A3B MoE self-spec MTP (116.1 t/s, 82.7% accept), a tool-call, a 2-turn conversation, and Qwen 3.6 27B GGUF DFlash (44.0 t/s, 69.9% accept) — all clean. **Gemma 4 31B GGUF DFlash was inconclusive for a second consecutive cycle** — real memory contention from other concurrent processes on the dev machine again produced an invalid reading (~0.9 t/s); the GGUF files themselves were verified present and correctly sized both times, so this isn't a caching issue, just needs an isolated re-run on an otherwise-idle machine.
+
 ## [0.6.9] — 2026-09-21
 
 **Both inference engines updated again: mlx-vlm 0.7.0 → 0.7.1 and llama.cpp b10894 → b11070.** As with every engine bump, every claim below was validated end-to-end in an isolated environment that never touches the shipping runtime, on the M5 Max, before the pin changed.

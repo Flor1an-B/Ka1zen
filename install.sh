@@ -70,33 +70,44 @@ info "Upgrading pip"
 "$PIP" install --upgrade pip >/dev/null
 
 # --- 3. Install packages (PINNED to validated versions) ---
-# We pin exact versions instead of `--upgrade`. mlx-vlm is pinned to 0.7.1
-# (validated 2026-09-21, isolated-venv regression on real weights — mlx floor
-# unchanged at >=0.32.2, so `mlx==0.32.2` below is unaffected). This is a
-# NEUTRAL bump on the metric we actually track: a same-session A/B against
-# 0.7.0 on the Qwen 3.6 35B-A3B MoE+MTP repro showed no measurable movement
-# either way (~106 t/s both), so the known ~15%-vs-0.6.15 MTP regression
-# (see DependencyManifest.swift / knownBad["mlx-vlm"]["0.6.16"]) carries
-# forward unchanged — still accepted as a documented tradeoff, not new.
-# Everything else clean: Gemma 4 E4B dense+MTP, Gemma 4 26B-A4B MoE+MTP,
-# DiffusionGemma mxfp4, tool-calls, 2-turn. 0.7.1 is mostly new model
-# support + a tool-calling refactor; no MTP/speculative-decoding change of
-# note landed for Ka1zen's Qwen/Gemma pairings. 0.6.0, 0.6.4 and 0.6.16 are
-# denylisted. transformers needs >= 5.14.0 (unchanged floor; prod stays
-# 5.14.1). IMPORTANT (still true — re-verified on the real prod run): the
-# installed mflux (0.17.5 — unpinned `pip install "mflux"` does NOT upgrade
-# an already-installed package) still caps mlx<0.32.0, so installing mflux
-# AFTER mlx-vlm makes pip DOWNGRADE mlx to 0.31.2 to satisfy it — which
-# breaks mlx-vlm (needs >= 0.32.2). So `mlx==0.32.2` is still pinned LAST to
-# force it back up after mflux; the end state is mlx 0.32.2 with a harmless
-# pip conflict warning about mflux (image generation not re-verified this
-# round — out of scope for this LLM-engine regression cycle). Ka1zen
-# version-gates MoE Fast Mode on
-# mlx-vlm ≥ 0.6.3 (SpeculativeDecoding.moeMTPSupported). The in-app "Runtime
-# Health" panel tracks the same validated set.
+# We pin exact versions instead of `--upgrade`. mlx-vlm is pinned to 0.7.2
+# (validated 2026-09-22, isolated-venv regression on real weights — mlx floor
+# unchanged at >=0.32.2, so `mlx==0.32.2` below is unaffected). 0.7.2 ships a
+# substantial APC/prefix-cache refactor (#2262/#2263/#2269/#2270/#2271/#2272/
+# #2286) — the historically fragile area for Ka1zen (recall #1748's rotating-
+# KV-cache corruption a few cycles back) — so this round specifically
+# stress-tested 2-turn Fast Mode conversations on BOTH MoE architectures:
+# clean, no cross-turn confusion, single "Loading model" per session (no
+# silent reload). The known ~15%-vs-0.6.15 Qwen MTP regression (see
+# knownBad["mlx-vlm"]["0.6.16"]) is unchanged (~107 t/s, matching 0.7.0/
+# 0.7.1 on the same prompt) — still an accepted tradeoff, not new. Also
+# clean: Gemma 4 E4B dense+MTP, Gemma 4 26B-A4B MoE+MTP, DiffusionGemma
+# mxfp4, tool-calls. Notable addition: 0.7.2 adds native Qwen-Image-2.1
+# (text-to-image + edit) support (#2321) — Ka1zen's model picker is a plain
+# HF repo-ID field with no family allowlist, so this becomes usable with no
+# Ka1zen-side code change; not exercised by this LLM-engine regression pass
+# (image-generation quality isn't part of this harness). 0.6.0, 0.6.4 and
+# 0.6.16 are denylisted. transformers needs >= 5.14.0 (unchanged floor; prod
+# stays 5.14.1). `mflux` stays UNPINNED ON PURPOSE — tried pinning it to
+# 0.20.0 on 2026-09-23 to silence its cosmetic `pip check` conflict with
+# `mlx` (0.17.5 declares `mlx<0.32.0`, which Ka1zen's mlx==0.32.2 always
+# trips — harmless, since `ImageGenerationTool` actually runs the separate
+# `uv tool install`-managed mflux, not this pip one). That pin transitively
+# bumped `torch` 2.12.0 → 2.14.0 (mflux 0.20.0 requires torch>=2.13), and
+# WITH torch 2.14.0 installed alongside it, `import mlx_vlm` started
+# crashing intermittently (SIGSEGV/SIGBUS, no Python traceback — 3/3 repro,
+# ~112 GB free RAM at the time so not a memory-pressure fluke) — a real
+# native-extension incompatibility between the two in the same process,
+# root cause not isolated further. Reverted immediately (real prod install
+# restored to mflux==0.17.5 + torch==2.12.0, re-verified stable 5/5). DO NOT
+# re-attempt pinning `mflux` past 0.17.5 in this shared pip environment
+# without first confirming `import mlx_vlm` stays crash-free with whatever
+# torch version that mflux version pulls in. Ka1zen version-gates MoE Fast
+# Mode on mlx-vlm ≥ 0.6.3 (SpeculativeDecoding.moeMTPSupported). The in-app
+# "Runtime Health" panel tracks the same validated set.
 PACKAGES=(
     "mlx-lm==0.31.3"
-    "mlx-vlm==0.7.1"
+    "mlx-vlm==0.7.2"
     "huggingface-hub==1.17.0"
     "hf-transfer==0.1.9"
     "mflux"
@@ -120,7 +131,7 @@ done
 # `brew upgrade` can't change the version Ka1zen runs. The release tarball is
 # self-contained (dylibs via @loader_path). Falls back to Homebrew if the
 # download fails.
-LLAMA_BUILD="b11070"
+LLAMA_BUILD="b11120"
 LLAMA_DEST="$HOME/Library/Application Support/Ka1zen/llama"
 LLAMA_URL="https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_BUILD}/llama-${LLAMA_BUILD}-bin-macos-arm64.tar.gz"
 info "Installing llama.cpp ${LLAMA_BUILD} (GGUF backend, pinned)"
