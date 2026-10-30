@@ -12,7 +12,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2015%2B-blue" alt="macOS 15+">
   <img src="https://img.shields.io/badge/architecture-Apple%20Silicon-black" alt="Apple Silicon">
-  <img src="https://img.shields.io/badge/version-0.6.11-orange" alt="Version 0.6.11">
+  <img src="https://img.shields.io/badge/version-0.6.12-orange" alt="Version 0.6.12">
   <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-green" alt="PolyForm Noncommercial">
 </p>
 
@@ -141,11 +141,12 @@ The script installs `mlx-lm`, `mlx-vlm`, `huggingface-hub`, `hf-transfer` and `m
 ```bash
 # Pinned to the versions Ka1zen is tested against:
 /Library/Frameworks/Python.framework/Versions/3.14/bin/pip3 install \
-  mlx-lm==0.31.3 mlx-vlm==0.7.2 huggingface-hub==1.17.0 hf_transfer==0.1.9 mflux mlx==0.32.2
-# mlx==0.32.2 goes LAST on purpose: mflux caps mlx<0.32.0 (until you separately
+  mlx-lm==0.32.2 mlx-vlm==0.7.11 transformers==5.19.0 tokenizers==0.23.3 datasets==5.1.0 \
+  huggingface-hub==2.4.0 hf_transfer==0.1.9 mflux mlx==0.32.4
+# mlx==0.32.4 goes LAST on purpose: mflux caps mlx<0.32.0 (until you separately
 # upgrade it — pip won't do that for an unpinned "mflux" on its own) and would
-# otherwise downgrade it, breaking mlx-vlm 0.7.2 (which needs 0.32.2). The
-# trailing pin forces mlx back to 0.32.2 (mflux still runs fine on it; pip
+# otherwise downgrade it, breaking mlx-vlm 0.7.11 (which needs 0.32.4). The
+# trailing pin forces mlx back to 0.32.4 (mflux still runs fine on it; pip
 # prints a harmless warning). Don't pin mflux past 0.17.5 here without first
 # checking `import mlx_vlm` stays crash-free — a 0.20.0 attempt transitively
 # bumped torch and made mlx_vlm segfault intermittently in the same process.

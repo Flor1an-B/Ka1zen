@@ -70,28 +70,56 @@ info "Upgrading pip"
 "$PIP" install --upgrade pip >/dev/null
 
 # --- 3. Install packages (PINNED to validated versions) ---
-# We pin exact versions instead of `--upgrade`. mlx-vlm is pinned to 0.7.2
-# (validated 2026-09-22, isolated-venv regression on real weights — mlx floor
-# unchanged at >=0.32.2, so `mlx==0.32.2` below is unaffected). 0.7.2 ships a
-# substantial APC/prefix-cache refactor (#2262/#2263/#2269/#2270/#2271/#2272/
-# #2286) — the historically fragile area for Ka1zen (recall #1748's rotating-
-# KV-cache corruption a few cycles back) — so this round specifically
-# stress-tested 2-turn Fast Mode conversations on BOTH MoE architectures:
-# clean, no cross-turn confusion, single "Loading model" per session (no
-# silent reload). The known ~15%-vs-0.6.15 Qwen MTP regression (see
-# knownBad["mlx-vlm"]["0.6.16"]) is unchanged (~107 t/s, matching 0.7.0/
-# 0.7.1 on the same prompt) — still an accepted tradeoff, not new. Also
-# clean: Gemma 4 E4B dense+MTP, Gemma 4 26B-A4B MoE+MTP, DiffusionGemma
-# mxfp4, tool-calls. Notable addition: 0.7.2 adds native Qwen-Image-2.1
-# (text-to-image + edit) support (#2321) — Ka1zen's model picker is a plain
-# HF repo-ID field with no family allowlist, so this becomes usable with no
-# Ka1zen-side code change; not exercised by this LLM-engine regression pass
-# (image-generation quality isn't part of this harness). 0.6.0, 0.6.4 and
-# 0.6.16 are denylisted. transformers needs >= 5.14.0 (unchanged floor; prod
-# stays 5.14.1). `mflux` stays UNPINNED ON PURPOSE — tried pinning it to
-# 0.20.0 on 2026-09-23 to silence its cosmetic `pip check` conflict with
-# `mlx` (0.17.5 declares `mlx<0.32.0`, which Ka1zen's mlx==0.32.2 always
-# trips — harmless, since `ImageGenerationTool` actually runs the separate
+# We pin exact versions instead of `--upgrade`. mlx-vlm bumped 0.7.2 → 0.7.8
+# (validated 2026-10-14, real prod Python.framework — `import mlx_vlm` 5/5
+# stable, mlx_vlm.server real chat completions + tool-calls clean on both
+# Gemma 4 E4B dense+MTP (assistant drafter, mechanism intact, ~1.2x on this
+# small model — the 31B/27B pair used for the historical 1.94x/2.6x numbers
+# wasn't cached on the test machine this round, so the full MTP/DFlash
+# speed battery wasn't re-run; spot-check Fast Mode once this ships) and
+# Qwen 3.6 35B-A3B MoE (no drafter, per the standing MoE+MTP policy below).
+# 0.7.8 requires mlx>=0.32.3 (was >=0.32.2) and mlx-audio>=0.5.2 (was
+# >=0.4.8) — both bumped to their current latest (0.32.3 / 0.5.9) to match;
+# mlx-audio isn't independently pinned here, it rides along as mlx-vlm's
+# transitive dependency. 0.6.0, 0.6.4 and 0.6.16 stay denylisted.
+# transformers/tokenizers/datasets bumped alongside (5.14.1→5.19.0,
+# 0.22.2→0.23.3, 4.8.5→5.1.0 respectively) — see the huggingface-hub note
+# right below for why. Ka1zen version-gates MoE Fast Mode on mlx-vlm ≥ 0.6.3
+# (SpeculativeDecoding.moeMTPSupported).
+#
+# huggingface-hub: bumped 1.17.0 → 2.2.0 (2026-10-14). FIRST attempt at this
+# got reverted on a surface-level `pip check` reading (transformers 5.14.1/
+# tokenizers 0.22.2/datasets 4.8.5, all still on OLD versions at the time,
+# declared `huggingface-hub<2.0` — that's what `pip check` was actually
+# flagging). Re-investigated properly: on PyPI, transformers 5.19.0,
+# tokenizers 0.23.3 and datasets 5.1.0 already declare
+# `huggingface-hub<3.0,>=1.31.0` — fully compatible with 2.x. Bumping all
+# three (above) makes those three conflicts disappear for real, verified
+# on the real prod Python.framework: `import mlx_vlm` stable 5/5,
+# mlx_vlm.server real chat completion + tool-call clean. Two conflict
+# lines remain in `pip check` and are BOTH confirmed cosmetic, not
+# functional:
+#   - `mflux 0.17.5 requires huggingface-hub<2.0` — same already-accepted
+#     class of noise as its `mlx<0.32.0` complaint below (dead pip fallback,
+#     real image-gen uses the separate uv-tool mflux). Verified mflux's own
+#     CODE still imports fine against huggingface-hub 2.2.0
+#     (`from mflux.models.flux2 import Flux2Klein` succeeds) — the `<2.0`
+#     bound is just a stale, over-conservative pin, not a real break.
+#   - `diffusers 0.38.0 requires huggingface-hub<2.0` — diffusers itself
+#     turned out to be ORPHANED in this environment: `pip show diffusers`
+#     shows no `Required-by` at all (nothing in Ka1zen's stack — not
+#     mlx-vlm, not mlx-audio, not either mflux — pulls it in), and its
+#     dist-info has a `REQUESTED` marker, meaning it was installed directly
+#     at some point, not as a dependency. Its stale pin is noise from a
+#     package nothing actually uses. Runtime Health's `DependencyInspector.
+#     pipCheck()` now excludes both of these lines by name (same treatment
+#     as the existing mflux exclusion) so this doesn't surface as a
+#     misleading "fix me" warning.
+#
+# `mflux` stays UNPINNED ON PURPOSE — tried pinning it to 0.20.0 on
+# 2026-09-23 to silence its cosmetic `pip check` conflict with `mlx` (it
+# declares `mlx<0.32.0`, which Ka1zen's `mlx==0.32.x` pin always trips —
+# harmless, since `ImageGenerationTool` actually runs the separate
 # `uv tool install`-managed mflux, not this pip one). That pin transitively
 # bumped `torch` 2.12.0 → 2.14.0 (mflux 0.20.0 requires torch>=2.13), and
 # WITH torch 2.14.0 installed alongside it, `import mlx_vlm` started
@@ -102,16 +130,37 @@ info "Upgrading pip"
 # restored to mflux==0.17.5 + torch==2.12.0, re-verified stable 5/5). DO NOT
 # re-attempt pinning `mflux` past 0.17.5 in this shared pip environment
 # without first confirming `import mlx_vlm` stays crash-free with whatever
-# torch version that mflux version pulls in. Ka1zen version-gates MoE Fast
-# Mode on mlx-vlm ≥ 0.6.3 (SpeculativeDecoding.moeMTPSupported). The in-app
-# "Runtime Health" panel tracks the same validated set.
+# torch version that mflux version pulls in. The in-app "Runtime Health"
+# panel tracks the same validated set.
+#
+# **2026-10-30: mlx-vlm 0.7.8 → 0.7.11, mlx-lm 0.31.3 → 0.32.2 (first mlx-lm
+# move in months), huggingface-hub 2.2.0 → 2.4.0.** Real prod Python.framework
+# test: `import mlx_vlm` stable 5/5, `pip check` unchanged (still only the
+# already-excluded mflux/diffusers lines — transformers/tokenizers stayed put,
+# nothing forced a bump). mlx-vlm 0.7.11 requires mlx>=0.32.4 (was >=0.32.3)
+# and mlx-audio>=0.6.2 (was >=0.5.2) — bumped to current latest (0.32.4 /
+# 0.6.3). Gemma-4-12B-it-qat-4bit dense + MTP (assistant drafter) re-verified:
+# ~1.37x speedup (40.4 → 55.2 t/s), non-regressed vs the 1.25x measured on
+# 0.7.8 two weeks ago — if anything slightly better, well within normal
+# bench-to-bench variance. Real chat completion + tool-call clean on both
+# that pair and the mlx-lm 0.32.2 path (`mlx_lm.server` binary, used for
+# non-vision/text-only models — confirmed via `ModelLauncher.swift`: VLM-
+# tagged models always route through mlx_vlm.server regardless of this pin,
+# so mlx-lm's own ~380-commit gap was almost entirely new-model support,
+# nothing touching Ka1zen's actual usage). huggingface-hub 2.4.0: no new
+# breaking changes for this stack (checked both 2.3.0 and 2.4.0 release
+# notes — Buckets, CLI extensions, inference-client fixes, nothing affecting
+# transformers/tokenizers/mlx-vlm compatibility).
 PACKAGES=(
-    "mlx-lm==0.31.3"
-    "mlx-vlm==0.7.2"
-    "huggingface-hub==1.17.0"
+    "mlx-lm==0.32.2"
+    "mlx-vlm==0.7.11"
+    "transformers==5.19.0"
+    "tokenizers==0.23.3"
+    "datasets==5.1.0"
+    "huggingface-hub==2.4.0"
     "hf-transfer==0.1.9"
     "mflux"
-    "mlx==0.32.2"   # MUST stay last — guards against any mflux mlx-downgrade (see note above)
+    "mlx==0.32.4"   # MUST stay last — guards against any mflux mlx-downgrade (see note above)
 )
 
 for pkg in "${PACKAGES[@]}"; do
@@ -131,7 +180,7 @@ done
 # `brew upgrade` can't change the version Ka1zen runs. The release tarball is
 # self-contained (dylibs via @loader_path). Falls back to Homebrew if the
 # download fails.
-LLAMA_BUILD="b11120"
+LLAMA_BUILD="b12005"
 LLAMA_DEST="$HOME/Library/Application Support/Ka1zen/llama"
 LLAMA_URL="https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_BUILD}/llama-${LLAMA_BUILD}-bin-macos-arm64.tar.gz"
 info "Installing llama.cpp ${LLAMA_BUILD} (GGUF backend, pinned)"
